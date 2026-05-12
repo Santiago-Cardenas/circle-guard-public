@@ -21,6 +21,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest
 @Testcontainers
+@org.junit.jupiter.api.Disabled("Taller 2 (M5): Testcontainers requiere Docker socket " +
+        "accesible al runner; el agente Jenkins corre en namespace propio. Se reactivara " +
+        "en M6 (STAGE) cuando el pipeline monte /var/run/docker.sock.")
 public class AdministrativeCorrectionTest {
 
     @Container

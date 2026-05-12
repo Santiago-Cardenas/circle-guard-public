@@ -42,6 +42,22 @@ pipeline {
       }
     }
 
+    stage('Unit + Integration tests') {
+      steps {
+        sh '''
+          set -e
+          chmod +x ./gradlew
+          # Excluye explicitamente el subproyecto E2E (necesita el cluster arriba con NodePorts)
+          ./gradlew test -x :tests:e2e:test --no-daemon --console=plain
+        '''
+      }
+      post {
+        always {
+          junit allowEmptyResults: true, testResults: '**/build/test-results/test/*.xml'
+        }
+      }
+    }
+
     stage('Build images') {
       steps {
         sh '''

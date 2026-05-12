@@ -70,7 +70,8 @@ kind: Service
 metadata: { name: auth }
 spec:
   selector: { app: auth }
-  ports: [{ port: 8180, targetPort: 8180 }]
+  type: NodePort
+  ports: [{ port: 8180, targetPort: 8180, nodePort: 30180 }]
 ---
 # ---------- gateway ----------
 apiVersion: apps/v1
@@ -200,4 +201,5 @@ kind: Service
 metadata: { name: dashboard }
 spec:
   selector: { app: dashboard }
-  ports: [{ port: 8084, targetPort: 8084 }]
+  type: NodePort
+  ports: [{ port: 8084, targetPort: 8084, nodePort: 30084 }]
