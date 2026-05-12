@@ -179,9 +179,11 @@ pipeline {
             git config user.email "jenkins@circleguard.local"
             git config user.name  "Jenkins CI"
             REMOTE_URL="https://${GH_USER}:${GH_TOKEN}@${GIT_REPO_URL}"
-            git fetch ${REMOTE_URL} master:master_local
-            git checkout master_local
-            git merge --no-ff origin/stage -m "auto-promote(ci): stage -> master (build #${BUILD_NUMBER})"
+            STAGE_SHA=${GIT_COMMIT}
+            git fetch ${REMOTE_URL} master
+            git branch -D master_local 2>/dev/null || true
+            git checkout -b master_local FETCH_HEAD
+            git merge --no-ff ${STAGE_SHA} -m "auto-promote(ci): stage -> master (build #${BUILD_NUMBER})"
             git push ${REMOTE_URL} master_local:master
             echo "Promovido stage -> master. El pipeline circleguard-master arrancara via SCM polling."
           '''
