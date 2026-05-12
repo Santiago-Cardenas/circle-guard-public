@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: circleguard-dev
+  labels:
+    env: dev
+    project: circleguard
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: circleguard-stage
+  labels:
+    env: stage
+    project: circleguard
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: circleguard-prod
+  labels:
+    env: prod
+    project: circleguard
