@@ -78,6 +78,10 @@ pipeline {
           set -e
           kubectl apply -f infra/k8s/namespaces.yaml
           kubectl apply -k infra/k8s/stage
+          # Espera a que termine el rollout inicial (evita race con el restart
+          # cuando es un namespace recien creado, donde apply + restart en
+          # paralelo dejan dos ReplicaSets compitiendo por el mismo pod label).
+          kubectl -n ${K8S_NS} rollout status deployment --timeout=300s
           kubectl -n ${K8S_NS} rollout restart deployment
           kubectl -n ${K8S_NS} rollout status deployment --timeout=300s
         '''
@@ -119,9 +123,19 @@ pipeline {
             exit 1
           fi
 
-          gw_pod=$(kubectl -n ${K8S_NS} get pod -l app=gateway -o jsonpath='{.items[0].metadata.name}')
-          kubectl -n ${K8S_NS} exec ${gw_pod} -- sh -c 'wget -qO- --server-response --tries=1 --timeout=5 http://localhost:8087/ 2>&1 | head -n 5 || true'
-          echo "Smoke OK."
+          # Reintenta exec porque el pod viejo del gateway puede estar siendo
+          # terminado justo cuando el nuevo aparece como Ready.
+          gw_attempt=0
+          while [ ${gw_attempt} -lt 6 ]; do
+            gw_attempt=$((gw_attempt+1))
+            gw_pod=$(kubectl -n ${K8S_NS} get pod -l app=gateway --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+            if [ -n "${gw_pod}" ] && kubectl -n ${K8S_NS} exec ${gw_pod} -- sh -c 'wget -qO- --tries=1 --timeout=5 http://localhost:8087/ >/dev/null 2>&1 || true' ; then
+              echo "Smoke OK contra ${gw_pod}."
+              break
+            fi
+            echo "  exec aun no disponible (pod=${gw_pod:-?}), retry..."
+            sleep 5
+          done
         '''
       }
     }
