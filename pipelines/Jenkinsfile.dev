@@ -145,6 +145,11 @@ pipeline {
             git config user.name  "Jenkins CI"
             REMOTE_URL="https://${GH_USER}:${GH_TOKEN}@${GIT_REPO_URL}"
             DEV_SHA=${GIT_COMMIT}
+            # Limpia modificaciones locales (chmod +x sobre scripts deja el bit
+            # ejecutable como cambio sin commitear) para que el checkout posterior
+            # no falle con "Your local changes would be overwritten".
+            git reset --hard ${DEV_SHA}
+            git clean -fd
             # Recrear rama local desde el remoto en cada build (workspace de Jenkins
             # se reusa, evitamos non-fast-forward por estado residual de un build previo).
             git fetch ${REMOTE_URL} stage

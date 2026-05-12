@@ -180,6 +180,10 @@ pipeline {
             git config user.name  "Jenkins CI"
             REMOTE_URL="https://${GH_USER}:${GH_TOKEN}@${GIT_REPO_URL}"
             STAGE_SHA=${GIT_COMMIT}
+            # Limpia modificaciones locales (chmod +x sobre scripts) para evitar
+            # "Your local changes would be overwritten by checkout".
+            git reset --hard ${STAGE_SHA}
+            git clean -fd
             git fetch ${REMOTE_URL} master
             git branch -D master_local 2>/dev/null || true
             git checkout -b master_local FETCH_HEAD
