@@ -69,25 +69,43 @@ pipeline {
       steps {
         sh '''
           set -e
-          echo "--- Pods en ${K8S_NS} ---"
-          kubectl -n ${K8S_NS} get pods -o wide
+          services="auth identity gateway promotion notification dashboard"
 
-          # Verifica que los 6 microservicios están Ready 1/1
-          for svc in auth identity gateway promotion notification dashboard; do
-            ready=$(kubectl -n ${K8S_NS} get deploy/${svc} -o jsonpath='{.status.readyReplicas}')
-            desired=$(kubectl -n ${K8S_NS} get deploy/${svc} -o jsonpath='{.spec.replicas}')
-            echo "deploy/${svc}: ${ready:-0}/${desired}"
-            if [ "${ready:-0}" != "${desired}" ]; then
-              echo "ERROR: ${svc} no está listo"
-              kubectl -n ${K8S_NS} describe deploy/${svc} | tail -n 30
-              exit 1
+          # Reintenta hasta 24 veces (4 min) — los Spring Boot tardan ~30s en estar Ready
+          attempt=0
+          max=24
+          while [ ${attempt} -lt ${max} ]; do
+            attempt=$((attempt+1))
+            all_ok=1
+            echo "--- intento ${attempt}/${max} ---"
+            for svc in ${services}; do
+              ready=$(kubectl -n ${K8S_NS} get deploy/${svc} -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo 0)
+              desired=$(kubectl -n ${K8S_NS} get deploy/${svc} -o jsonpath='{.spec.replicas}' 2>/dev/null || echo 1)
+              echo "  deploy/${svc}: ${ready:-0}/${desired}"
+              if [ "${ready:-0}" != "${desired}" ]; then
+                all_ok=0
+              fi
+            done
+            if [ ${all_ok} -eq 1 ]; then
+              echo "Todos los microservicios Ready."
+              break
             fi
+            sleep 10
           done
 
-          # Smoke HTTP contra el gateway (NodePort 30087 dentro del cluster)
+          if [ ${all_ok} -ne 1 ]; then
+            echo "ERROR: timeout esperando a los microservicios"
+            kubectl -n ${K8S_NS} get pods
+            for svc in ${services}; do
+              kubectl -n ${K8S_NS} describe deploy/${svc} | tail -n 20
+            done
+            exit 1
+          fi
+
+          # Smoke HTTP contra el gateway
           gw_pod=$(kubectl -n ${K8S_NS} get pod -l app=gateway -o jsonpath='{.items[0].metadata.name}')
           kubectl -n ${K8S_NS} exec ${gw_pod} -- sh -c 'wget -qO- --server-response --tries=1 --timeout=5 http://localhost:8087/ 2>&1 | head -n 5 || true'
-          echo "Smoke OK: gateway responde HTTP."
+          echo "Smoke OK."
         '''
       }
     }
