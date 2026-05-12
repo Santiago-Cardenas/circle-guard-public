@@ -156,7 +156,7 @@ pipeline {
             git branch -D stage_local 2>/dev/null || true
             git checkout -b stage_local FETCH_HEAD
             # SHA exacto del commit de dev que acaba de pasar el pipeline.
-            git merge --no-ff ${DEV_SHA} -m "auto-promote(ci): dev -> stage (build #${BUILD_NUMBER})"
+            git merge --no-ff -X theirs ${DEV_SHA} -m "auto-promote(ci): dev -> stage (build #${BUILD_NUMBER})"
             git push ${REMOTE_URL} stage_local:stage
             echo "Promovido dev -> stage. El pipeline circleguard-stage arrancara via SCM polling."
           '''

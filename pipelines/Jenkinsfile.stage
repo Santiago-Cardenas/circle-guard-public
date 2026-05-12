@@ -187,7 +187,7 @@ pipeline {
             git fetch ${REMOTE_URL} master
             git branch -D master_local 2>/dev/null || true
             git checkout -b master_local FETCH_HEAD
-            git merge --no-ff ${STAGE_SHA} -m "auto-promote(ci): stage -> master (build #${BUILD_NUMBER})"
+            git merge --no-ff -X theirs ${STAGE_SHA} -m "auto-promote(ci): stage -> master (build #${BUILD_NUMBER})"
             git push ${REMOTE_URL} master_local:master
             echo "Promovido stage -> master. El pipeline circleguard-master arrancara via SCM polling."
           '''
