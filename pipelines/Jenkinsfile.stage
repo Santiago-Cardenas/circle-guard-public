@@ -46,7 +46,7 @@ pipeline {
       }
     }
 
-    stage('Unit + Integration tests + bootJar') {
+    stage('Tests & Build') {
       steps {
         sh '''
           set -e
