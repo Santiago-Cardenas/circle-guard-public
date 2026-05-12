@@ -144,9 +144,14 @@ pipeline {
             git config user.email "jenkins@circleguard.local"
             git config user.name  "Jenkins CI"
             REMOTE_URL="https://${GH_USER}:${GH_TOKEN}@${GIT_REPO_URL}"
-            git fetch ${REMOTE_URL} stage:stage_local
-            git checkout stage_local
-            git merge --no-ff origin/dev -m "auto-promote(ci): dev -> stage (build #${BUILD_NUMBER})"
+            DEV_SHA=${GIT_COMMIT}
+            # Recrear rama local desde el remoto en cada build (workspace de Jenkins
+            # se reusa, evitamos non-fast-forward por estado residual de un build previo).
+            git fetch ${REMOTE_URL} stage
+            git branch -D stage_local 2>/dev/null || true
+            git checkout -b stage_local FETCH_HEAD
+            # SHA exacto del commit de dev que acaba de pasar el pipeline.
+            git merge --no-ff ${DEV_SHA} -m "auto-promote(ci): dev -> stage (build #${BUILD_NUMBER})"
             git push ${REMOTE_URL} stage_local:stage
             echo "Promovido dev -> stage. El pipeline circleguard-stage arrancara via SCM polling."
           '''
