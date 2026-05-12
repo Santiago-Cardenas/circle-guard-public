@@ -17,4 +17,8 @@ images:
   - { name: circleguard/notification, newTag: stage }
   - { name: circleguard/dashboard,    newTag: stage }
 
-# Stage: 1 réplica de cada servicio (cluster local). Permite override fácil.
+# Re-mapeo de NodePorts para no colisionar con dev (30087/30180/30084).
+patches:
+  - path: nodeports-patch.yaml
+
+# Stage: 1 réplica de cada servicio (cluster local). NodePorts: 31087/31180/31084.

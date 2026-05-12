@@ -1,0 +1,159 @@
+// Pipeline STAGE
+// Rama:    stage
+// Trigger: push a origin/stage (poll SCM cada minuto como fallback)
+// Salida:  6 imágenes circleguard/*:stage + despliegue a ns circleguard-stage + suite E2E
+pipeline {
+  agent any
+
+  options {
+    timestamps()
+    disableConcurrentBuilds()
+    buildDiscarder(logRotator(numToKeepStr: '15'))
+    timeout(time: 40, unit: 'MINUTES')
+  }
+
+  triggers {
+    pollSCM('* * * * *')
+  }
+
+  environment {
+    IMAGE_TAG    = 'stage'
+    K8S_NS       = 'circleguard-stage'
+    KUBECONFIG   = '/var/jenkins_home/.kube/config'
+    GATEWAY_URL  = 'http://host.docker.internal:31087'
+    AUTH_URL     = 'http://host.docker.internal:31180'
+    DASHBOARD_URL= 'http://host.docker.internal:31084'
+  }
+
+  stages {
+
+    stage('Checkout') {
+      steps {
+        checkout scm
+        sh 'git log -1 --pretty=oneline'
+      }
+    }
+
+    stage('Toolchain check') {
+      steps {
+        sh '''
+          set -e
+          echo "--- docker ---";    docker version --format '{{.Client.Version}}'
+          echo "--- kubectl ---";   kubectl version --client=true -o yaml | head -n 5
+          echo "--- cluster ---";   kubectl get nodes
+        '''
+      }
+    }
+
+    stage('Unit + Integration tests + bootJar') {
+      steps {
+        sh '''
+          set -e
+          chmod +x ./gradlew
+          ./gradlew test bootJar -x :tests:e2e:test --no-daemon --console=plain
+          echo "--- JARs producidos ---"
+          find services -path '*/build/libs/*.jar' ! -name '*-plain.jar' -printf '%p (%s bytes)\\n'
+        '''
+      }
+      post {
+        always {
+          junit allowEmptyResults: true, testResults: '**/build/test-results/test/*.xml'
+        }
+      }
+    }
+
+    stage('Build images') {
+      steps {
+        sh '''
+          set -e
+          chmod +x infra/docker/build-all.sh
+          TAG=${IMAGE_TAG} bash infra/docker/build-all.sh
+        '''
+      }
+    }
+
+    stage('Deploy to circleguard-stage') {
+      steps {
+        sh '''
+          set -e
+          kubectl apply -f infra/k8s/namespaces.yaml
+          kubectl apply -k infra/k8s/stage
+          kubectl -n ${K8S_NS} rollout restart deployment
+          kubectl -n ${K8S_NS} rollout status deployment --timeout=300s
+        '''
+      }
+    }
+
+    stage('Smoke test') {
+      steps {
+        sh '''
+          set -e
+          services="auth identity gateway promotion notification dashboard"
+          attempt=0
+          max=24
+          while [ ${attempt} -lt ${max} ]; do
+            attempt=$((attempt+1))
+            all_ok=1
+            echo "--- intento ${attempt}/${max} ---"
+            for svc in ${services}; do
+              ready=$(kubectl -n ${K8S_NS} get deploy/${svc} -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo 0)
+              desired=$(kubectl -n ${K8S_NS} get deploy/${svc} -o jsonpath='{.spec.replicas}' 2>/dev/null || echo 1)
+              echo "  deploy/${svc}: ${ready:-0}/${desired}"
+              if [ "${ready:-0}" != "${desired}" ]; then
+                all_ok=0
+              fi
+            done
+            if [ ${all_ok} -eq 1 ]; then
+              echo "Todos los microservicios Ready."
+              break
+            fi
+            sleep 10
+          done
+
+          if [ ${all_ok} -ne 1 ]; then
+            echo "ERROR: timeout esperando a los microservicios"
+            kubectl -n ${K8S_NS} get pods
+            for svc in ${services}; do
+              kubectl -n ${K8S_NS} describe deploy/${svc} | tail -n 20
+            done
+            exit 1
+          fi
+
+          gw_pod=$(kubectl -n ${K8S_NS} get pod -l app=gateway -o jsonpath='{.items[0].metadata.name}')
+          kubectl -n ${K8S_NS} exec ${gw_pod} -- sh -c 'wget -qO- --server-response --tries=1 --timeout=5 http://localhost:8087/ 2>&1 | head -n 5 || true'
+          echo "Smoke OK."
+        '''
+      }
+    }
+
+    stage('E2E tests') {
+      steps {
+        sh '''
+          set -e
+          # Las pruebas E2E corren contra los NodePorts del cluster (31087/31180/31084
+          # para stage). Se exponen al contenedor Jenkins via host.docker.internal.
+          ./gradlew :tests:e2e:test -PrunE2E=true \
+            -DgatewayUrl=${GATEWAY_URL} \
+            -DauthUrl=${AUTH_URL} \
+            -DdashboardUrl=${DASHBOARD_URL} \
+            --no-daemon --console=plain
+        '''
+      }
+      post {
+        always {
+          junit allowEmptyResults: true, testResults: 'tests/e2e/build/test-results/test/*.xml'
+        }
+      }
+    }
+  }
+
+  post {
+    success {
+      echo "Pipeline STAGE OK — imágenes :${IMAGE_TAG} desplegadas en ${K8S_NS} y E2E verde."
+    }
+    failure {
+      sh 'kubectl -n ${K8S_NS} get pods || true'
+      sh 'kubectl -n ${K8S_NS} get events --sort-by=.lastTimestamp | tail -n 30 || true'
+    }
+  }
+}
