@@ -222,7 +222,7 @@ pipeline {
       }
     }
 
-    stage('Tag release') {
+    stage('Publish release') {
       steps {
         withCredentials([usernamePassword(credentialsId: 'github-pat',
                                           usernameVariable: 'GH_USER',
@@ -238,6 +238,31 @@ pipeline {
             git push https://${GH_USER}:${GH_TOKEN}@${GIT_REPO_URL} ${RELEASE_VERSION} || \
               echo "WARN: no se pudo publicar el tag (posiblemente ya existia en remoto)"
             echo "Tag ${RELEASE_VERSION} publicado."
+
+            # Publica un GitHub Release contra el tag, usando el cuerpo del
+            # RELEASE-NOTES.md generado en el stage anterior. Se hace por API REST
+            # para no depender de gh CLI.
+            REPO_API=$(echo ${GIT_REPO_URL} | sed -E 's#^github.com/##; s#\\.git$##')
+            # Escapa el body como JSON: convierte \\ a \\\\, \" a \\\", saltos a \\n
+            BODY_JSON=$(python3 -c 'import json,sys;print(json.dumps(open("build/release/RELEASE-NOTES.md").read()))')
+            cat > /tmp/release-payload.json <<EOF
+{"tag_name":"${RELEASE_VERSION}","name":"${RELEASE_VERSION}","body":${BODY_JSON},"draft":false,"prerelease":false}
+EOF
+            HTTP=$(curl -sS -o /tmp/release-resp.json -w "%{http_code}" \
+              -X POST \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              https://api.github.com/repos/${REPO_API}/releases \
+              -d @/tmp/release-payload.json)
+            echo "GitHub releases API -> HTTP ${HTTP}"
+            if [ "${HTTP}" = "201" ]; then
+              echo "GitHub Release publicado."
+            elif [ "${HTTP}" = "422" ]; then
+              echo "Release ya existia, ok."
+            else
+              echo "ERROR publicando release:"; cat /tmp/release-resp.json; exit 1
+            fi
           '''
         }
       }
