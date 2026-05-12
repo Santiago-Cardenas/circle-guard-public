@@ -1,5 +1,10 @@
 # Pipeline DEV
 
+Es la primera línea de defensa de la cadena de promoción
+`dev -> stage -> master`. Optimiza para feedback rápido (~3 min): compila,
+prueba, despliega al namespace `circleguard-dev` y, si todo queda verde,
+promueve automáticamente el commit a la rama `stage`.
+
 ## Archivo
 
 [`pipelines/Jenkinsfile.dev`](../../pipelines/Jenkinsfile.dev) — Declarative
@@ -11,11 +16,40 @@ Pipeline (Groovy DSL).
 |---|---|---|
 | 1 | **Checkout** | Clona la rama `dev` desde GitHub |
 | 2 | **Toolchain check** | Verifica `docker`, `kubectl`, conexión al cluster |
-| 3 | **Build images** | Ejecuta `infra/docker/build-all.sh` → 6 imágenes `circleguard/*:dev` |
-| 4 | **Deploy to circleguard-dev** | `kubectl apply -k infra/k8s/dev` + `rollout restart` + `rollout status` |
-| 5 | **Smoke test** | Verifica replicas Ready en los 6 deployments + HTTP al gateway |
+| 3 | **Tests & Build** | `./gradlew test bootJar` (excluye E2E) + publica JUnit |
+| 4 | **Build images** | Ejecuta `infra/docker/build-all.sh` → 6 imágenes `circleguard/*:dev` |
+| 5 | **Deploy to circleguard-dev** | `kubectl apply -k infra/k8s/dev` + `rollout restart` + `rollout status` |
+| 6 | **Smoke test** | Verifica replicas Ready en los 6 deployments + HTTP al gateway |
+| 7 | **Auto-promote dev → stage** | Hace `git merge --no-ff` del commit recién verificado en la rama `stage` y la pushea |
 
 `post.failure` vuelca `kubectl get pods` y los últimos 30 eventos para diagnóstico.
+
+## Auto-promoción a `stage`
+
+El último stage usa la credencial Jenkins `github-pat` (Personal Access Token con
+`Contents: Read and write`) para abrir un push HTTPS contra GitHub:
+
+```sh
+REMOTE_URL="https://${GH_USER}:${GH_TOKEN}@github.com/.../circle-guard-public.git"
+git fetch ${REMOTE_URL} stage
+git checkout -b stage_local FETCH_HEAD
+git merge --no-ff ${GIT_COMMIT} -m "auto-promote(ci): dev -> stage (build #${BUILD_NUMBER})"
+git push ${REMOTE_URL} stage_local:stage
+```
+
+Detalles importantes:
+
+- Antes del `fetch` se hace `git reset --hard ${GIT_COMMIT} && git clean -fd`
+  para limpiar cambios residuales del workspace (por ejemplo el bit ejecutable
+  que `chmod +x` agregó a los scripts en stages anteriores). Sin esto, el
+  `git checkout -b` falla con *"Your local changes would be overwritten"*.
+- La rama local `stage_local` se borra y recrea en cada build para evitar
+  rechazos *non-fast-forward* heredados de un build previo.
+- `--no-ff` deja un commit explícito de promoción que sirve de marcador en la
+  historia y referencia el `BUILD_NUMBER`.
+
+Tras el push, `circleguard-stage` detectará el cambio en el siguiente ciclo de
+SCM polling (≤ 1 min) y arrancará por sí solo.
 
 ## Trigger
 
