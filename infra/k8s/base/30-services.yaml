@@ -1,0 +1,203 @@
+# =====================================================================
+# Microservicios CircleGuard — Deployments + Services
+# Imágenes: circleguard/<svc>:dev (locales en Docker Desktop)
+# =====================================================================
+
+# ---------- identity ----------
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: identity }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: identity } }
+  template:
+    metadata: { labels: { app: identity } }
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: identity
+          image: circleguard/identity:dev
+          imagePullPolicy: IfNotPresent
+          ports: [{ containerPort: 8083 }]
+          env:
+            - { name: SERVER_PORT, value: "8083" }
+            - { name: SPRING_DATASOURCE_URL, value: "jdbc:postgresql://postgres:5432/circleguard_identity" }
+            - { name: SPRING_DATASOURCE_USERNAME, valueFrom: { configMapKeyRef: { name: circleguard-config, key: POSTGRES_USER } } }
+            - { name: SPRING_DATASOURCE_PASSWORD, valueFrom: { secretKeyRef: { name: circleguard-secrets, key: POSTGRES_PASSWORD } } }
+            - { name: JWT_SECRET, valueFrom: { secretKeyRef: { name: circleguard-secrets, key: JWT_SECRET } } }
+            - { name: VAULT_SECRET, valueFrom: { secretKeyRef: { name: circleguard-secrets, key: VAULT_SECRET } } }
+            - { name: VAULT_SALT, valueFrom: { secretKeyRef: { name: circleguard-secrets, key: VAULT_SALT } } }
+            - { name: VAULT_HASH_SALT, valueFrom: { secretKeyRef: { name: circleguard-secrets, key: VAULT_HASH_SALT } } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: identity }
+spec:
+  selector: { app: identity }
+  ports: [{ port: 8083, targetPort: 8083 }]
+---
+# ---------- auth ----------
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: auth }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: auth } }
+  template:
+    metadata: { labels: { app: auth } }
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: auth
+          image: circleguard/auth:dev
+          imagePullPolicy: IfNotPresent
+          ports: [{ containerPort: 8180 }]
+          env:
+            - { name: SERVER_PORT, value: "8180" }
+            - { name: SPRING_DATASOURCE_URL, value: "jdbc:postgresql://postgres:5432/circleguard_auth" }
+            - { name: SPRING_DATASOURCE_USERNAME, valueFrom: { configMapKeyRef: { name: circleguard-config, key: POSTGRES_USER } } }
+            - { name: SPRING_DATASOURCE_PASSWORD, valueFrom: { secretKeyRef: { name: circleguard-secrets, key: POSTGRES_PASSWORD } } }
+            - { name: SPRING_LDAP_URLS, valueFrom: { configMapKeyRef: { name: circleguard-config, key: LDAP_URL } } }
+            - { name: SPRING_LDAP_BASE, valueFrom: { configMapKeyRef: { name: circleguard-config, key: LDAP_BASE } } }
+            - { name: SPRING_LDAP_USERNAME, valueFrom: { configMapKeyRef: { name: circleguard-config, key: LDAP_USER } } }
+            - { name: SPRING_LDAP_PASSWORD, valueFrom: { secretKeyRef: { name: circleguard-secrets, key: LDAP_PASSWORD } } }
+            - { name: JWT_SECRET, valueFrom: { secretKeyRef: { name: circleguard-secrets, key: JWT_SECRET } } }
+            - { name: QR_SECRET, valueFrom: { secretKeyRef: { name: circleguard-secrets, key: QR_SECRET } } }
+            - { name: IDENTITY_API_URL, valueFrom: { configMapKeyRef: { name: circleguard-config, key: IDENTITY_API_URL } } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: auth }
+spec:
+  selector: { app: auth }
+  ports: [{ port: 8180, targetPort: 8180 }]
+---
+# ---------- gateway ----------
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: gateway }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: gateway } }
+  template:
+    metadata: { labels: { app: gateway } }
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: gateway
+          image: circleguard/gateway:dev
+          imagePullPolicy: IfNotPresent
+          ports: [{ containerPort: 8087 }]
+          env:
+            - { name: SERVER_PORT, value: "8087" }
+            - { name: SPRING_DATA_REDIS_HOST, valueFrom: { configMapKeyRef: { name: circleguard-config, key: REDIS_HOST } } }
+            - { name: SPRING_DATA_REDIS_PORT, valueFrom: { configMapKeyRef: { name: circleguard-config, key: REDIS_PORT } } }
+            - { name: JWT_SECRET, valueFrom: { secretKeyRef: { name: circleguard-secrets, key: JWT_SECRET } } }
+            - { name: QR_SECRET, valueFrom: { secretKeyRef: { name: circleguard-secrets, key: QR_SECRET } } }
+            - { name: AUTH_API_URL, valueFrom: { configMapKeyRef: { name: circleguard-config, key: AUTH_API_URL } } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: gateway }
+spec:
+  type: NodePort
+  selector: { app: gateway }
+  ports: [{ port: 8087, targetPort: 8087, nodePort: 30087 }]
+---
+# ---------- promotion ----------
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: promotion }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: promotion } }
+  template:
+    metadata: { labels: { app: promotion } }
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: promotion
+          image: circleguard/promotion:dev
+          imagePullPolicy: IfNotPresent
+          ports: [{ containerPort: 8088 }]
+          env:
+            - { name: SERVER_PORT, value: "8088" }
+            - { name: SPRING_DATASOURCE_URL, value: "jdbc:postgresql://postgres:5432/circleguard_promotion" }
+            - { name: SPRING_DATASOURCE_USERNAME, valueFrom: { configMapKeyRef: { name: circleguard-config, key: POSTGRES_USER } } }
+            - { name: SPRING_DATASOURCE_PASSWORD, valueFrom: { secretKeyRef: { name: circleguard-secrets, key: POSTGRES_PASSWORD } } }
+            - { name: SPRING_NEO4J_URI, valueFrom: { configMapKeyRef: { name: circleguard-config, key: NEO4J_URI } } }
+            - { name: SPRING_NEO4J_AUTHENTICATION_USERNAME, valueFrom: { configMapKeyRef: { name: circleguard-config, key: NEO4J_USER } } }
+            - { name: SPRING_NEO4J_AUTHENTICATION_PASSWORD, valueFrom: { secretKeyRef: { name: circleguard-secrets, key: NEO4J_PASSWORD } } }
+            - { name: SPRING_KAFKA_BOOTSTRAP_SERVERS, valueFrom: { configMapKeyRef: { name: circleguard-config, key: KAFKA_BOOTSTRAP_SERVERS } } }
+            - { name: SPRING_DATA_REDIS_HOST, valueFrom: { configMapKeyRef: { name: circleguard-config, key: REDIS_HOST } } }
+            - { name: SPRING_DATA_REDIS_PORT, valueFrom: { configMapKeyRef: { name: circleguard-config, key: REDIS_PORT } } }
+            - { name: JWT_SECRET, valueFrom: { secretKeyRef: { name: circleguard-secrets, key: JWT_SECRET } } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: promotion }
+spec:
+  selector: { app: promotion }
+  ports: [{ port: 8088, targetPort: 8088 }]
+---
+# ---------- notification ----------
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: notification }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: notification } }
+  template:
+    metadata: { labels: { app: notification } }
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: notification
+          image: circleguard/notification:dev
+          imagePullPolicy: IfNotPresent
+          ports: [{ containerPort: 8082 }]
+          env:
+            - { name: SERVER_PORT, value: "8082" }
+            - { name: SPRING_KAFKA_BOOTSTRAP_SERVERS, valueFrom: { configMapKeyRef: { name: circleguard-config, key: KAFKA_BOOTSTRAP_SERVERS } } }
+            - { name: SPRING_MAIL_HOST, valueFrom: { configMapKeyRef: { name: circleguard-config, key: SMTP_HOST } } }
+            - { name: SPRING_MAIL_PORT, valueFrom: { configMapKeyRef: { name: circleguard-config, key: SMTP_PORT } } }
+            - { name: AUTH_API_URL, valueFrom: { configMapKeyRef: { name: circleguard-config, key: AUTH_API_URL } } }
+            - { name: JWT_SECRET, valueFrom: { secretKeyRef: { name: circleguard-secrets, key: JWT_SECRET } } }
+            - { name: QR_SECRET, valueFrom: { secretKeyRef: { name: circleguard-secrets, key: QR_SECRET } } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: notification }
+spec:
+  selector: { app: notification }
+  ports: [{ port: 8082, targetPort: 8082 }]
+---
+# ---------- dashboard ----------
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: dashboard }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: dashboard } }
+  template:
+    metadata: { labels: { app: dashboard } }
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: dashboard
+          image: circleguard/dashboard:dev
+          imagePullPolicy: IfNotPresent
+          ports: [{ containerPort: 8084 }]
+          env:
+            - { name: SERVER_PORT, value: "8084" }
+            - { name: SPRING_DATASOURCE_URL, value: "jdbc:postgresql://postgres:5432/circleguard_dashboard" }
+            - { name: SPRING_DATASOURCE_USERNAME, valueFrom: { configMapKeyRef: { name: circleguard-config, key: POSTGRES_USER } } }
+            - { name: SPRING_DATASOURCE_PASSWORD, valueFrom: { secretKeyRef: { name: circleguard-secrets, key: POSTGRES_PASSWORD } } }
+            - { name: PROMOTION_API_URL, valueFrom: { configMapKeyRef: { name: circleguard-config, key: PROMOTION_API_URL } } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: dashboard }
+spec:
+  selector: { app: dashboard }
+  ports: [{ port: 8084, targetPort: 8084 }]

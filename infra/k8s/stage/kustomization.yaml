@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: circleguard-stage
+
+resources:
+  - ../base
+
+commonLabels:
+  env: stage
+
+images:
+  - { name: circleguard/auth,         newTag: stage }
+  - { name: circleguard/identity,     newTag: stage }
+  - { name: circleguard/gateway,      newTag: stage }
+  - { name: circleguard/promotion,    newTag: stage }
+  - { name: circleguard/notification, newTag: stage }
+  - { name: circleguard/dashboard,    newTag: stage }
+
+# Stage: 1 réplica de cada servicio (cluster local). Permite override fácil.

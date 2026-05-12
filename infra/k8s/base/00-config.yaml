@@ -1,0 +1,39 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: circleguard-config
+data:
+  # Endpoints internos del cluster (Service DNS)
+  POSTGRES_HOST: "postgres"
+  POSTGRES_PORT: "5432"
+  POSTGRES_USER: "admin"
+  NEO4J_URI: "bolt://neo4j:7687"
+  NEO4J_USER: "neo4j"
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
+  KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
+  LDAP_URL: "ldap://openldap:389"
+  LDAP_BASE: "dc=circleguard,dc=edu"
+  LDAP_USER: "cn=admin,dc=circleguard,dc=edu"
+  # SMTP dummy (no se usa en pruebas, evita crashloop)
+  SMTP_HOST: "mailhog"
+  SMTP_PORT: "1025"
+  # URLs entre servicios
+  AUTH_API_URL: "http://auth:8180"
+  IDENTITY_API_URL: "http://identity:8083"
+  PROMOTION_API_URL: "http://promotion:8088"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: circleguard-secrets
+type: Opaque
+stringData:
+  POSTGRES_PASSWORD: "password"
+  NEO4J_PASSWORD: "password"
+  LDAP_PASSWORD: "admin"
+  JWT_SECRET: "my-super-secret-dev-key-32-chars-long-12345678"
+  QR_SECRET: "my-qr-secret-key-for-dev-1234567890"
+  VAULT_SECRET: "746573742d7365637265742d33322d63686172732d6c6f6e672d313233343536"
+  VAULT_SALT: "deadbeef"
+  VAULT_HASH_SALT: "12345678"
