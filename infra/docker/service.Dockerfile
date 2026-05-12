@@ -20,8 +20,15 @@ COPY gradle ./gradle
 # Copiar todos los build.gradle.kts de los servicios (para que Gradle resuelva el grafo)
 COPY services ./services
 
-# Construir solo el servicio pedido (omitiendo tests; las pruebas corren en el pipeline)
-RUN chmod +x ./gradlew \
+# CACHEBUST: invalidar este layer cuando el pipeline lo pase (evita reusar un
+# build/libs corrupto en cache, ej. tras un cuelgue del daemon Docker).
+ARG CACHEBUST=0
+
+# Construir solo el servicio pedido (omitiendo tests; las pruebas corren en el pipeline).
+# Limpia build/libs antes para garantizar que solo queden artefactos frescos de bootJar.
+RUN echo "CACHEBUST=${CACHEBUST}" \
+ && chmod +x ./gradlew \
+ && rm -rf services/${SERVICE_NAME}/build/libs \
  && ./gradlew --no-daemon :services:${SERVICE_NAME}:bootJar -x test
 
 # Renombra el jar a un nombre fijo para la siguiente stage.

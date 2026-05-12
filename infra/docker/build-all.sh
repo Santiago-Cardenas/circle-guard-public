@@ -15,13 +15,19 @@ services=(
   "circleguard-dashboard-service:circleguard/dashboard"
 )
 
+# Timestamp para invalidar el layer del bootJar en cada corrida del pipeline.
+# Esto evita que un cache corrupto (ej. tras un cuelgue del daemon Docker)
+# se reuse y se quede con un build/libs/*.jar de 0 bytes.
+CACHEBUST="${CACHEBUST:-$(date +%s)}"
+
 for entry in "${services[@]}"; do
   name="${entry%%:*}"
   image="${entry##*:}"
-  echo "==> Building ${image}:${TAG}"
+  echo "==> Building ${image}:${TAG} (cachebust=${CACHEBUST})"
   docker build \
     -f "${ROOT}/infra/docker/service.Dockerfile" \
     --build-arg SERVICE_NAME="${name}" \
+    --build-arg CACHEBUST="${CACHEBUST}" \
     -t "${image}:${TAG}" \
     "${ROOT}"
 done
