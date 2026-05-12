@@ -5,7 +5,18 @@
 .vscode
 .gradle
 **/.gradle
-**/build
+# Excluimos sub-paths de build pesados/innecesarios pero conservamos
+# services/*/build/libs/ porque el runtime Dockerfile copia el JAR ya
+# compilado por Gradle desde ahí.
+**/build/classes
+**/build/tmp
+**/build/generated
+**/build/reports
+**/build/test-results
+**/build/resources
+**/build/distributions
+**/build/jacoco
+**/build/dependency-check-data
 **/bin
 **/out
 **/target

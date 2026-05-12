@@ -42,13 +42,18 @@ pipeline {
       }
     }
 
-    stage('Unit + Integration tests') {
+    stage('Unit + Integration tests + bootJar') {
       steps {
         sh '''
           set -e
           chmod +x ./gradlew
-          # Excluye explicitamente el subproyecto E2E (necesita el cluster arriba con NodePorts)
-          ./gradlew test -x :tests:e2e:test --no-daemon --console=plain
+          # Compila + prueba + empaqueta los 6 bootJars en una sola invocacion de Gradle.
+          # Esto evita arrancar 6 JVMs Gradle DENTRO de Docker en el siguiente stage,
+          # que ahogaba el daemon en Docker Desktop free (WSL2).
+          # Excluye explicitamente el subproyecto E2E (necesita el cluster con NodePorts).
+          ./gradlew test bootJar -x :tests:e2e:test --no-daemon --console=plain
+          echo "--- JARs producidos ---"
+          find services -path '*/build/libs/*.jar' ! -name '*-plain.jar' -printf '%p (%s bytes)\\n'
         '''
       }
       post {
@@ -63,6 +68,8 @@ pipeline {
         sh '''
           set -e
           chmod +x infra/docker/build-all.sh
+          # Solo empaqueta JARs ya compilados en imagenes JRE minimalistas.
+          # Cada build deberia tardar <5s (COPY + chown).
           TAG=${IMAGE_TAG} bash infra/docker/build-all.sh
         '''
       }
