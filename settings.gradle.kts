@@ -25,3 +25,6 @@ include("services:circleguard-form-service")
 include("services:circleguard-file-service")
 include("services:circleguard-gateway-service")
 include("services:circleguard-dashboard-service")
+
+// Pruebas E2E (Taller 2 - M5c). Solo corren con -PrunE2E=true o env RUN_E2E=1.
+include("tests:e2e")

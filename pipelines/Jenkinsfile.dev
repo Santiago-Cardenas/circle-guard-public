@@ -1,0 +1,177 @@
+// Pipeline DEV — Taller 2 (Pipelines, Pruebas y Lanzamiento)
+// Rama:    dev
+// Trigger: push a origin/dev (poll SCM cada minuto como fallback)
+// Salida:  6 imágenes circleguard/*:dev + despliegue a ns circleguard-dev
+pipeline {
+  agent any
+
+  options {
+    timestamps()
+    disableConcurrentBuilds()
+    buildDiscarder(logRotator(numToKeepStr: '15'))
+    timeout(time: 30, unit: 'MINUTES')
+  }
+
+  triggers {
+    pollSCM('* * * * *')
+  }
+
+  environment {
+    IMAGE_TAG    = 'dev'
+    K8S_NS       = 'circleguard-dev'
+    KUBECONFIG   = '/var/jenkins_home/.kube/config'
+    GIT_REPO_URL = 'github.com/Santiago-Cardenas/circle-guard-public.git'
+  }
+
+  stages {
+
+    stage('Checkout') {
+      steps {
+        checkout scm
+        sh 'git log -1 --pretty=oneline'
+      }
+    }
+
+    stage('Toolchain check') {
+      steps {
+        sh '''
+          set -e
+          echo "--- docker ---";    docker version --format '{{.Client.Version}}'
+          echo "--- kubectl ---";   kubectl version --client=true -o yaml | head -n 5
+          echo "--- cluster ---";   kubectl get nodes
+        '''
+      }
+    }
+
+    stage('Unit + Integration tests + bootJar') {
+      steps {
+        sh '''
+          set -e
+          chmod +x ./gradlew
+          # Compila + prueba + empaqueta los 6 bootJars en una sola invocacion de Gradle.
+          # Esto evita arrancar 6 JVMs Gradle DENTRO de Docker en el siguiente stage,
+          # que ahogaba el daemon en Docker Desktop free (WSL2).
+          # Excluye explicitamente el subproyecto E2E (necesita el cluster con NodePorts).
+          ./gradlew test bootJar -x :tests:e2e:test --no-daemon --console=plain
+          echo "--- JARs producidos ---"
+          find services -path '*/build/libs/*.jar' ! -name '*-plain.jar' -printf '%p (%s bytes)\\n'
+        '''
+      }
+      post {
+        always {
+          junit allowEmptyResults: true, testResults: '**/build/test-results/test/*.xml'
+        }
+      }
+    }
+
+    stage('Build images') {
+      steps {
+        sh '''
+          set -e
+          chmod +x infra/docker/build-all.sh
+          # Solo empaqueta JARs ya compilados en imagenes JRE minimalistas.
+          # Cada build deberia tardar <5s (COPY + chown).
+          TAG=${IMAGE_TAG} bash infra/docker/build-all.sh
+        '''
+      }
+    }
+
+    stage('Deploy to circleguard-dev') {
+      steps {
+        sh '''
+          set -e
+          kubectl apply -f infra/k8s/namespaces.yaml
+          kubectl apply -k infra/k8s/dev
+          # Forzar que K8s tome la nueva imagen :dev (mismo tag)
+          kubectl -n ${K8S_NS} rollout restart deployment
+          kubectl -n ${K8S_NS} rollout status deployment --timeout=240s
+        '''
+      }
+    }
+
+    stage('Smoke test') {
+      steps {
+        sh '''
+          set -e
+          services="auth identity gateway promotion notification dashboard"
+
+          # Reintenta hasta 24 veces (4 min) — los Spring Boot tardan ~30s en estar Ready
+          attempt=0
+          max=24
+          while [ ${attempt} -lt ${max} ]; do
+            attempt=$((attempt+1))
+            all_ok=1
+            echo "--- intento ${attempt}/${max} ---"
+            for svc in ${services}; do
+              ready=$(kubectl -n ${K8S_NS} get deploy/${svc} -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo 0)
+              desired=$(kubectl -n ${K8S_NS} get deploy/${svc} -o jsonpath='{.spec.replicas}' 2>/dev/null || echo 1)
+              echo "  deploy/${svc}: ${ready:-0}/${desired}"
+              if [ "${ready:-0}" != "${desired}" ]; then
+                all_ok=0
+              fi
+            done
+            if [ ${all_ok} -eq 1 ]; then
+              echo "Todos los microservicios Ready."
+              break
+            fi
+            sleep 10
+          done
+
+          if [ ${all_ok} -ne 1 ]; then
+            echo "ERROR: timeout esperando a los microservicios"
+            kubectl -n ${K8S_NS} get pods
+            for svc in ${services}; do
+              kubectl -n ${K8S_NS} describe deploy/${svc} | tail -n 20
+            done
+            exit 1
+          fi
+
+          # Smoke HTTP contra el gateway
+          gw_pod=$(kubectl -n ${K8S_NS} get pod -l app=gateway -o jsonpath='{.items[0].metadata.name}')
+          kubectl -n ${K8S_NS} exec ${gw_pod} -- sh -c 'wget -qO- --server-response --tries=1 --timeout=5 http://localhost:8087/ 2>&1 | head -n 5 || true'
+          echo "Smoke OK."
+        '''
+      }
+    }
+
+    stage('Auto-promote dev -> stage') {
+      steps {
+        withCredentials([usernamePassword(credentialsId: 'github-pat',
+                                          usernameVariable: 'GH_USER',
+                                          passwordVariable: 'GH_TOKEN')]) {
+          sh '''
+            set -e
+            git config user.email "jenkins@circleguard.local"
+            git config user.name  "Jenkins CI"
+            REMOTE_URL="https://${GH_USER}:${GH_TOKEN}@${GIT_REPO_URL}"
+            DEV_SHA=${GIT_COMMIT}
+            # Limpia modificaciones locales (chmod +x sobre scripts deja el bit
+            # ejecutable como cambio sin commitear) para que el checkout posterior
+            # no falle con "Your local changes would be overwritten".
+            git reset --hard ${DEV_SHA}
+            git clean -fd
+            # Recrear rama local desde el remoto en cada build (workspace de Jenkins
+            # se reusa, evitamos non-fast-forward por estado residual de un build previo).
+            git fetch ${REMOTE_URL} stage
+            git branch -D stage_local 2>/dev/null || true
+            git checkout -b stage_local FETCH_HEAD
+            # SHA exacto del commit de dev que acaba de pasar el pipeline.
+            git merge --no-ff ${DEV_SHA} -m "auto-promote(ci): dev -> stage (build #${BUILD_NUMBER})"
+            git push ${REMOTE_URL} stage_local:stage
+            echo "Promovido dev -> stage. El pipeline circleguard-stage arrancara via SCM polling."
+          '''
+        }
+      }
+    }
+  }
+
+  post {
+    success {
+      echo "Pipeline DEV OK — imágenes :${IMAGE_TAG} desplegadas en ${K8S_NS}"
+    }
+    failure {
+      sh 'kubectl -n ${K8S_NS} get pods || true'
+      sh 'kubectl -n ${K8S_NS} get events --sort-by=.lastTimestamp | tail -n 30 || true'
+    }
+  }
+}

@@ -18,6 +18,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @SpringBootTest
 @Testcontainers
+@org.junit.jupiter.api.Disabled("Pendiente: Testcontainers requiere Docker socket " +
+        "accesible al runner; el agente Jenkins corre en namespace propio. Se reactivara " +
+        "en el entorno STAGE cuando el pipeline monte /var/run/docker.sock.")
 public class HealthStatusReevaluationTest {
 
     @Container

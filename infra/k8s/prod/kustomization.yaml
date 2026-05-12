@@ -1,0 +1,34 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: circleguard-prod
+
+resources:
+  - ../base
+
+commonLabels:
+  env: prod
+
+images:
+  - { name: circleguard/auth,         newTag: prod }
+  - { name: circleguard/identity,     newTag: prod }
+  - { name: circleguard/gateway,      newTag: prod }
+  - { name: circleguard/promotion,    newTag: prod }
+  - { name: circleguard/notification, newTag: prod }
+  - { name: circleguard/dashboard,    newTag: prod }
+
+# En prod escalamos los servicios stateless a 2 réplicas y exponemos NodePorts 32xxx
+# (para no chocar con dev=30xxx ni stage=31xxx en el mismo cluster local).
+patches:
+  - path: nodeports-patch.yaml
+  - target: { kind: Deployment, name: auth }
+    patch: |-
+      - { op: replace, path: /spec/replicas, value: 2 }
+  - target: { kind: Deployment, name: gateway }
+    patch: |-
+      - { op: replace, path: /spec/replicas, value: 2 }
+  - target: { kind: Deployment, name: dashboard }
+    patch: |-
+      - { op: replace, path: /spec/replicas, value: 2 }
+
+# NodePorts publicados: gateway=32087, auth=32180, dashboard=32084.

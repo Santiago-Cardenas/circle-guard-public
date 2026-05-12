@@ -1,0 +1,24 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: circleguard-stage
+
+resources:
+  - ../base
+
+commonLabels:
+  env: stage
+
+images:
+  - { name: circleguard/auth,         newTag: stage }
+  - { name: circleguard/identity,     newTag: stage }
+  - { name: circleguard/gateway,      newTag: stage }
+  - { name: circleguard/promotion,    newTag: stage }
+  - { name: circleguard/notification, newTag: stage }
+  - { name: circleguard/dashboard,    newTag: stage }
+
+# Re-mapeo de NodePorts para no colisionar con dev (30087/30180/30084).
+patches:
+  - path: nodeports-patch.yaml
+
+# Stage: 1 réplica de cada servicio (cluster local). NodePorts: 31087/31180/31084.
