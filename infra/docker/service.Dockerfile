@@ -24,8 +24,14 @@ COPY services ./services
 RUN chmod +x ./gradlew \
  && ./gradlew --no-daemon :services:${SERVICE_NAME}:bootJar -x test
 
-# Renombra el jar a un nombre fijo para la siguiente stage
-RUN cp services/${SERVICE_NAME}/build/libs/*.jar /workspace/app.jar
+# Renombra el jar a un nombre fijo para la siguiente stage.
+# Spring Boot bootJar genera DOS archivos: el boot jar ejecutable y un *-plain.jar.
+# Se debe seleccionar exclusivamente el boot jar (excluyendo el plain).
+RUN set -e \
+ && JAR="$(find services/${SERVICE_NAME}/build/libs -maxdepth 1 -type f -name '*.jar' ! -name '*-plain.jar' | head -n 1)" \
+ && test -n "$JAR" || (echo "ERROR: no se encontró bootJar en services/${SERVICE_NAME}/build/libs"; ls -la services/${SERVICE_NAME}/build/libs; exit 1) \
+ && cp "$JAR" /workspace/app.jar \
+ && ls -la /workspace/app.jar
 
 # ---------- Stage 2: runtime ----------
 FROM ${JRE_IMAGE} AS runtime
