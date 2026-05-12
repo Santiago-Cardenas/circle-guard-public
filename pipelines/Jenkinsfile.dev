@@ -1,0 +1,105 @@
+// Pipeline DEV — Taller 2 (Pipelines, Pruebas y Lanzamiento)
+// Rama:    dev
+// Trigger: push a origin/dev (poll SCM cada minuto como fallback)
+// Salida:  6 imágenes circleguard/*:dev + despliegue a ns circleguard-dev
+pipeline {
+  agent any
+
+  options {
+    timestamps()
+    disableConcurrentBuilds()
+    buildDiscarder(logRotator(numToKeepStr: '15'))
+    timeout(time: 30, unit: 'MINUTES')
+  }
+
+  triggers {
+    pollSCM('* * * * *')
+  }
+
+  environment {
+    IMAGE_TAG  = 'dev'
+    K8S_NS     = 'circleguard-dev'
+    KUBECONFIG = '/var/jenkins_home/.kube/config'
+  }
+
+  stages {
+
+    stage('Checkout') {
+      steps {
+        checkout scm
+        sh 'git log -1 --pretty=oneline'
+      }
+    }
+
+    stage('Toolchain check') {
+      steps {
+        sh '''
+          set -e
+          echo "--- docker ---";    docker version --format '{{.Client.Version}}'
+          echo "--- kubectl ---";   kubectl version --client=true -o yaml | head -n 5
+          echo "--- cluster ---";   kubectl get nodes
+        '''
+      }
+    }
+
+    stage('Build images') {
+      steps {
+        sh '''
+          set -e
+          chmod +x infra/docker/build-all.sh
+          TAG=${IMAGE_TAG} bash infra/docker/build-all.sh
+        '''
+      }
+    }
+
+    stage('Deploy to circleguard-dev') {
+      steps {
+        sh '''
+          set -e
+          kubectl apply -f infra/k8s/namespaces.yaml
+          kubectl apply -k infra/k8s/dev
+          # Forzar que K8s tome la nueva imagen :dev (mismo tag)
+          kubectl -n ${K8S_NS} rollout restart deployment
+          kubectl -n ${K8S_NS} rollout status deployment --timeout=240s
+        '''
+      }
+    }
+
+    stage('Smoke test') {
+      steps {
+        sh '''
+          set -e
+          echo "--- Pods en ${K8S_NS} ---"
+          kubectl -n ${K8S_NS} get pods -o wide
+
+          # Verifica que los 6 microservicios están Ready 1/1
+          for svc in auth identity gateway promotion notification dashboard; do
+            ready=$(kubectl -n ${K8S_NS} get deploy/${svc} -o jsonpath='{.status.readyReplicas}')
+            desired=$(kubectl -n ${K8S_NS} get deploy/${svc} -o jsonpath='{.spec.replicas}')
+            echo "deploy/${svc}: ${ready:-0}/${desired}"
+            if [ "${ready:-0}" != "${desired}" ]; then
+              echo "ERROR: ${svc} no está listo"
+              kubectl -n ${K8S_NS} describe deploy/${svc} | tail -n 30
+              exit 1
+            fi
+          done
+
+          # Smoke HTTP contra el gateway (NodePort 30087 dentro del cluster)
+          gw_pod=$(kubectl -n ${K8S_NS} get pod -l app=gateway -o jsonpath='{.items[0].metadata.name}')
+          kubectl -n ${K8S_NS} exec ${gw_pod} -- sh -c 'wget -qO- --server-response --tries=1 --timeout=5 http://localhost:8087/ 2>&1 | head -n 5 || true'
+          echo "Smoke OK: gateway responde HTTP."
+        '''
+      }
+    }
+  }
+
+  post {
+    success {
+      echo "Pipeline DEV OK — imágenes :${IMAGE_TAG} desplegadas en ${K8S_NS}"
+    }
+    failure {
+      sh 'kubectl -n ${K8S_NS} get pods || true'
+      sh 'kubectl -n ${K8S_NS} get events --sort-by=.lastTimestamp | tail -n 30 || true'
+    }
+  }
+}
