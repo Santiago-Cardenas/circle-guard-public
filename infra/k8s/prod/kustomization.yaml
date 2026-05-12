@@ -17,8 +17,10 @@ images:
   - { name: circleguard/notification, newTag: prod }
   - { name: circleguard/dashboard,    newTag: prod }
 
-# En prod escalamos los servicios stateless a 2 réplicas.
+# En prod escalamos los servicios stateless a 2 réplicas y exponemos NodePorts 32xxx
+# (para no chocar con dev=30xxx ni stage=31xxx en el mismo cluster local).
 patches:
+  - path: nodeports-patch.yaml
   - target: { kind: Deployment, name: auth }
     patch: |-
       - { op: replace, path: /spec/replicas, value: 2 }
@@ -28,3 +30,5 @@ patches:
   - target: { kind: Deployment, name: dashboard }
     patch: |-
       - { op: replace, path: /spec/replicas, value: 2 }
+
+# NodePorts publicados: gateway=32087, auth=32180, dashboard=32084.
