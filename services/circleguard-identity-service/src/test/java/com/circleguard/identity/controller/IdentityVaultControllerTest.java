@@ -19,7 +19,7 @@ import com.circleguard.identity.config.SecurityConfig;
 
 @WebMvcTest(IdentityVaultController.class)
 @Import(SecurityConfig.class)
-@org.junit.jupiter.api.Disabled("Taller 2 (M5): el contexto Web del slice no logra " +
+@org.junit.jupiter.api.Disabled("Pendiente: el contexto Web del slice no logra " +
         "cargar SecurityConfig junto a los MockBean de Kafka en el entorno de pipeline. " +
         "El controlador queda cubierto por las pruebas E2E (M5c) sobre /api/v1/identities/*. " +
         "Reactivar tras refactor del slice de seguridad.")

@@ -17,7 +17,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @WebMvcTest(HealthStatusController.class)
 @Import(SecurityConfig.class)
-@org.junit.jupiter.api.Disabled("Taller 2 (M5): assertions desfasadas respecto al " +
+@org.junit.jupiter.api.Disabled("Pendiente: assertions desfasadas respecto al " +
         "controlador actual (verify() sobre firma vieja). Cobertura del flujo cubierta " +
         "por StatusLifecycleTest y la prueba E2E del dashboard. Reactivar tras alinear test.")
 class HealthStatusControllerTest {

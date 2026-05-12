@@ -14,7 +14,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest
 @AutoConfigureMockMvc
-@Disabled("Taller 2 (M5): Flyway falla al levantar el contexto sobre H2 por SQL " +
+@Disabled("Pendiente: Flyway falla al levantar el contexto sobre H2 por SQL " +
         "especifico de Postgres en V2..V5. El controlador se cubre indirectamente por " +
         "los demas tests del modulo; reactivar cuando se aporten migraciones cross-db.")
 class AttachmentControllerTest {

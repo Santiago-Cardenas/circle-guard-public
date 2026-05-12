@@ -1,4 +1,4 @@
-# Pruebas de carga — CircleGuard (M5d, Taller 2)
+# Pruebas de carga — CircleGuard
 
 Suite [Locust](https://locust.io) que ejerce los endpoints públicos del cluster
 CircleGuard (gateway, auth y dashboard expuestos por NodePort).

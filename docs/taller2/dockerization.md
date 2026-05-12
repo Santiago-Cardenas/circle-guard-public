@@ -1,4 +1,4 @@
-# M2 — Dockerización de los 6 microservicios
+# Dockerización de los 6 microservicios
 
 ## Estrategia
 

@@ -1,4 +1,4 @@
-# M1 — Configuración Jenkins / Docker / Kubernetes
+# Configuración Jenkins / Docker / Kubernetes
 
 ## Estado verificado
 

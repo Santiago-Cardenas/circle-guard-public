@@ -18,9 +18,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SpringBootTest
 @Testcontainers
-@org.junit.jupiter.api.Disabled("Taller 2 (M5): Testcontainers requiere Docker socket " +
+@org.junit.jupiter.api.Disabled("Pendiente: Testcontainers requiere Docker socket " +
         "accesible al runner; el agente Jenkins corre en namespace propio. Se reactivara " +
-        "en M6 (STAGE) cuando el pipeline monte /var/run/docker.sock.")
+        "en el entorno STAGE cuando el pipeline monte /var/run/docker.sock.")
 public class PromotionPerformanceTest {
 
     @Container

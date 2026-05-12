@@ -1,4 +1,4 @@
-# M3 — Manifiestos Kubernetes (Kustomize)
+# Manifiestos Kubernetes (Kustomize)
 
 ## Estructura
 
@@ -75,5 +75,5 @@ zookeeper-...                   1/1     Running   0
 | `stage` | `circleguard-stage` | `:stage` | 1 c/u |
 | `prod` | `circleguard-prod` | `:prod` | 2 en `auth`, `gateway`, `dashboard` |
 
-Los pipelines (M4/M6/M7) construirán y reetiquetarán las mismas imágenes
+Los pipelines (dev/stage/master) construirán y reetiquetarán las mismas imágenes
 con el tag adecuado y aplicarán el overlay correspondiente.

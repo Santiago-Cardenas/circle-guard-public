@@ -1,4 +1,4 @@
-# M4 — Pipeline DEV
+# Pipeline DEV
 
 ## Archivo
 
@@ -30,12 +30,12 @@ fork público + `pipelines/Jenkinsfile.dev`). Visible en
 
 ## Pre-requisitos en el container Jenkins
 
-Instalados durante M4:
+Instalados en el contenedor Jenkins:
 
 - **docker CLI** (binario estático 27.3.1) en `/usr/local/bin/docker`.
 - **wget** (vía apt) para health-checks.
 - **Grupo docker** creado con el GID del socket; usuario `jenkins` añadido.
-- `kubectl` y `KUBECONFIG=/var/jenkins_home/.kube/config` ya configurados en M1.
+- `kubectl` y `KUBECONFIG=/var/jenkins_home/.kube/config` ya configurados en el setup de Jenkins.
 
 ## Cómo ejecutar manualmente
 
