@@ -48,3 +48,10 @@ pgdata/
 neo4jdata/
 
 .metals/
+
+# Personal notes (no commitear)
+_local/
+
+# Locust artifacts
+tests/perf/__pycache__/
+tests/perf/results_*.csv
