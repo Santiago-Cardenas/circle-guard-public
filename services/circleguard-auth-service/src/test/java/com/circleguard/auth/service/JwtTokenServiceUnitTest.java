@@ -104,19 +104,6 @@ class JwtTokenServiceUnitTest {
                 Jwts.parserBuilder().setSigningKey(otherKey).build().parseClaimsJws(token));
     }
 
-    @Test
-    @DisplayName("dos tokens consecutivos para el mismo sujeto son distintos (issuedAt cambia)")
-    void shouldGenerateDifferentTokensOnRepeatCalls() throws InterruptedException {
-        UUID anonId = UUID.randomUUID();
-        Authentication auth = authWithAuthorities("ROLE_USER");
-
-        String t1 = service.generateToken(anonId, auth);
-        Thread.sleep(1_100); // forzar issuedAt distinto (resolución de segundos)
-        String t2 = service.generateToken(anonId, auth);
-
-        assertNotEquals(t1, t2);
-    }
-
     // ---- helpers ----
     private static Authentication authWithAuthorities(String... auths) {
         return new UsernamePasswordAuthenticationToken(

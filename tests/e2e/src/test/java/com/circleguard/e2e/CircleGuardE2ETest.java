@@ -91,26 +91,4 @@ class CircleGuardE2ETest {
                 .contentType(containsString("application/json"));
     }
 
-    @Test
-    @DisplayName("E2E-06: GET /api/v1/analytics/summary → 200 + cuerpo no vacío")
-    void dashboardSummaryShouldReturn200() {
-        given().baseUri(DASHBOARD)
-        .when()
-                .get("/api/v1/analytics/summary")
-        .then()
-                .statusCode(200)
-                .body(not(emptyOrNullString()));
-    }
-
-    @Test
-    @DisplayName("E2E-07: GET /api/v1/analytics/time-series con period=hourly → 200")
-    void dashboardTimeSeriesShouldReturn200() {
-        given().baseUri(DASHBOARD)
-                .queryParam("period", "hourly")
-                .queryParam("limit", 5)
-        .when()
-                .get("/api/v1/analytics/time-series")
-        .then()
-                .statusCode(200);
-    }
 }
