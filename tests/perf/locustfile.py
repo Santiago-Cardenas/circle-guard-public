@@ -47,7 +47,15 @@ class CircleGuardLoadUser(HttpUser):
 
     # ---------------- auth ----------------
 
-    @task(3)
+    # NOTA: el endpoint POST /api/v1/auth/login con credenciales validas no
+    # se incluye en esta suite de carga porque el handshake BCrypt (cost 10)
+    # es CPU-intensivo (~100 ms por hash) y satura el pod de auth con 50
+    # usuarios concurrentes, devolviendo HTTP 500. Es un cuello de botella
+    # conocido; mitigarlo requiere mas replicas o bajar el cost de BCrypt
+    # para entornos de carga. La suite carga solo endpoints idempotentes
+    # de lectura mas el rechazo de credenciales invalidas.
+
+    @task(2)
     def auth_login_invalid(self):
         """POST /api/v1/auth/login con credenciales malas -> 401 esperado."""
         with self.client.post(
@@ -56,8 +64,11 @@ class CircleGuardLoadUser(HttpUser):
             name="AUTH /login (401)",
             catch_response=True,
         ) as resp:
-            # Aceptamos 401 (credenciales malas) o 500 (LDAP no responde bajo carga)
-            if resp.status_code not in (401, 500):
+            # 401 es el caso esperado; 400 tambien es valido si el validador
+            # rechaza el username generado.
+            if resp.status_code in (400, 401):
+                resp.success()
+            else:
                 resp.failure(f"codigo inesperado {resp.status_code}")
 
     @task(1)
