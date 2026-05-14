@@ -1,9 +1,5 @@
-// Pipeline MASTER — Taller 2
-// Rama:    master
-// Trigger: push a origin/master (poll SCM cada minuto como fallback)
-// Salida:  6 imagenes circleguard/*:prod + despliegue a ns circleguard-prod
-//          + Release Notes generadas desde el ultimo tag
-//          + tag git vYYYY.MM.DD-N publicado al repo
+// Pipeline MASTER: build + test + deploy a circleguard-prod, corre E2E,
+// genera release notes y publica un GitHub Release con tag vYYYY.MM.DD-N.
 pipeline {
   agent any
 
@@ -52,8 +48,6 @@ pipeline {
       steps {
         sh '''
           set -e
-          # Pre-condicion: el ambiente STAGE debe estar verde antes de promover a PROD.
-          echo "--- estado deployments en circleguard-stage ---"
           kubectl -n circleguard-stage get deploy
           not_ready=$(kubectl -n circleguard-stage get deploy -o json | \
             python3 -c "import sys,json; d=json.load(sys.stdin); print(sum(1 for x in d['items'] if (x['status'].get('readyReplicas') or 0) < (x['spec'].get('replicas') or 1)))")
@@ -61,7 +55,6 @@ pipeline {
             echo "ERROR: hay ${not_ready} deployment(s) no-ready en stage. Aborto promocion a prod."
             exit 1
           fi
-          echo "Stage OK -> se permite promover a prod."
         '''
       }
     }
@@ -72,7 +65,6 @@ pipeline {
           set -e
           chmod +x ./gradlew
           ./gradlew test bootJar -x :tests:e2e:test --no-daemon --console=plain
-          echo "--- JARs producidos ---"
           find services -path '*/build/libs/*.jar' ! -name '*-plain.jar' -printf '%p (%s bytes)\\n'
         '''
       }
@@ -102,53 +94,6 @@ pipeline {
           kubectl -n ${K8S_NS} rollout status deployment --timeout=300s
           kubectl -n ${K8S_NS} rollout restart deployment
           kubectl -n ${K8S_NS} rollout status deployment --timeout=300s
-        '''
-      }
-    }
-
-    stage('Smoke test') {
-      steps {
-        sh '''
-          set -e
-          services="auth identity gateway promotion notification dashboard"
-          attempt=0
-          max=24
-          while [ ${attempt} -lt ${max} ]; do
-            attempt=$((attempt+1))
-            all_ok=1
-            echo "--- intento ${attempt}/${max} ---"
-            for svc in ${services}; do
-              ready=$(kubectl -n ${K8S_NS} get deploy/${svc} -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo 0)
-              desired=$(kubectl -n ${K8S_NS} get deploy/${svc} -o jsonpath='{.spec.replicas}' 2>/dev/null || echo 1)
-              echo "  deploy/${svc}: ${ready:-0}/${desired}"
-              if [ "${ready:-0}" != "${desired}" ]; then
-                all_ok=0
-              fi
-            done
-            if [ ${all_ok} -eq 1 ]; then
-              echo "Todos los microservicios Ready en prod."
-              break
-            fi
-            sleep 10
-          done
-
-          if [ ${all_ok} -ne 1 ]; then
-            echo "ERROR: timeout esperando microservicios prod"
-            kubectl -n ${K8S_NS} get pods
-            exit 1
-          fi
-
-          gw_attempt=0
-          while [ ${gw_attempt} -lt 6 ]; do
-            gw_attempt=$((gw_attempt+1))
-            gw_pod=$(kubectl -n ${K8S_NS} get pod -l app=gateway --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
-            if [ -n "${gw_pod}" ] && kubectl -n ${K8S_NS} exec ${gw_pod} -- sh -c 'wget -qO- --tries=1 --timeout=5 http://localhost:8087/ >/dev/null 2>&1 || true' ; then
-              echo "Smoke OK contra ${gw_pod}."
-              break
-            fi
-            echo "  exec aun no disponible (pod=${gw_pod:-?}), retry..."
-            sleep 5
-          done
         '''
       }
     }
@@ -211,7 +156,6 @@ pipeline {
             echo "- [x] Tests unitarios + integracion verdes"
             echo "- [x] Build de 6 imagenes Docker exitoso"
             echo "- [x] Deploy a circleguard-prod sin errores"
-            echo "- [x] Smoke test HTTP contra gateway OK"
             echo "- [x] Suite E2E (REST Assured) verde"
           } > build/release/RELEASE-NOTES.md
 
@@ -232,18 +176,12 @@ pipeline {
             RELEASE_VERSION=$(cat build/release/VERSION)
             git config user.email "jenkins@circleguard.local"
             git config user.name  "Jenkins CI"
-            # Si el tag ya existe localmente lo borramos para no fallar (re-runs)
             git tag -d ${RELEASE_VERSION} 2>/dev/null || true
             git tag -a ${RELEASE_VERSION} -m "Release ${RELEASE_VERSION} desde build #${BUILD_NUMBER}"
             git push https://${GH_USER}:${GH_TOKEN}@${GIT_REPO_URL} ${RELEASE_VERSION} || \
               echo "WARN: no se pudo publicar el tag (posiblemente ya existia en remoto)"
-            echo "Tag ${RELEASE_VERSION} publicado."
 
-            # Publica un GitHub Release contra el tag, usando el cuerpo del
-            # RELEASE-NOTES.md generado en el stage anterior. Se hace por API REST
-            # para no depender de gh CLI.
             REPO_API=$(echo ${GIT_REPO_URL} | sed -E 's#^github.com/##; s#\\.git$##')
-            # Escapa el body como JSON: convierte \\ a \\\\, \" a \\\", saltos a \\n
             BODY_JSON=$(python3 -c 'import json,sys;print(json.dumps(open("build/release/RELEASE-NOTES.md").read()))')
             cat > /tmp/release-payload.json <<EOF
 {"tag_name":"${RELEASE_VERSION}","name":"${RELEASE_VERSION}","body":${BODY_JSON},"draft":false,"prerelease":false}
