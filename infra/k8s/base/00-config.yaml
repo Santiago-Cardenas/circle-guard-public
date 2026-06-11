@@ -22,6 +22,8 @@ data:
   AUTH_API_URL: "http://auth:8180"
   IDENTITY_API_URL: "http://identity:8083"
   PROMOTION_API_URL: "http://promotion:8088"
+  # Feature Toggle del gateway: chequeo de salud encendido/apagado.
+  FEATURES_HEALTH_CHECK_ENABLED: "true"
 ---
 apiVersion: v1
 kind: Secret
