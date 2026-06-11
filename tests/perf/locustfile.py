@@ -1,4 +1,4 @@
-"""Pruebas de performance (M5d - Taller 2) para CircleGuard.
+"""Pruebas de performance para CircleGuard.
 
 Cada `@task` es una prueba independiente; en conjunto golpean el gateway,
 auth y dashboard del cluster K8s. Se valida latencia y porcentaje de fallos

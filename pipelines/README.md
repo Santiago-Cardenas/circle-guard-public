@@ -1,6 +1,6 @@
 # Jenkins Pipelines
 
-Jenkinsfiles del Taller 2.
+Jenkinsfiles del proyecto.
 
 | Archivo | Entorno | Descripción |
 |---|---|---|
