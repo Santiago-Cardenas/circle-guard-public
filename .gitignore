@@ -52,6 +52,9 @@ neo4jdata/
 # Personal notes (no commitear)
 _local/
 
+# Documentacion de trabajo (no se commitea al repo)
+docs/final/
+
 # Locust artifacts
 tests/perf/__pycache__/
 tests/perf/results_*.csv
