@@ -1,5 +1,5 @@
 // Pipeline MASTER: build + test + deploy a circleguard-prod, corre E2E,
-// genera release notes y publica un GitHub Release con tag vYYYY.MM.DD-N.
+// genera release notes y publica un GitHub Release con tag semantico vX.Y.Z.
 pipeline {
   agent any
 
@@ -121,8 +121,11 @@ pipeline {
         sh '''
           set -e
           mkdir -p build/release
-          RELEASE_VERSION=$(date +v%Y.%m.%d)-${BUILD_NUMBER}
+          chmod +x pipelines/semver.sh
+          # Version semantica calculada a partir de los commits (Conventional Commits).
+          RELEASE_VERSION=$(bash pipelines/semver.sh)
           echo ${RELEASE_VERSION} > build/release/VERSION
+          echo "Nueva version semantica: ${RELEASE_VERSION}"
 
           PREV_TAG=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)
           if [ -z "${PREV_TAG}" ]; then
@@ -214,6 +217,7 @@ EOF
     failure {
       sh 'kubectl -n ${K8S_NS} get pods || true'
       sh 'kubectl -n ${K8S_NS} get events --sort-by=.lastTimestamp | tail -n 30 || true'
+      sh 'bash pipelines/notify.sh "FALLO pipeline MASTER #${BUILD_NUMBER}" "El build de produccion fallo. Revisa: ${BUILD_URL}" || true'
     }
   }
 }
