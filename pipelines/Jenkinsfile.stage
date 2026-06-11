@@ -101,6 +101,31 @@ pipeline {
       }
     }
 
+    stage('Escaneo DAST (OWASP ZAP)') {
+      steps {
+        // ZAP ataca el gateway ya desplegado para buscar problemas de seguridad
+        // en tiempo de ejecucion (headers, cookies, etc.). El baseline es rapido
+        // y no rompe el build (solo deja el reporte como evidencia).
+        sh '''
+          set +e
+          mkdir -p build/security
+          docker run --rm \
+            -v "$(pwd)/build/security:/zap/wrk:rw" \
+            ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py \
+              -t ${GATEWAY_URL}/actuator/health \
+              -r zap-gateway.html \
+              -I
+          echo "ZAP termino (reporte en build/security/zap-gateway.html)."
+        '''
+      }
+      post {
+        always {
+          archiveArtifacts artifacts: 'build/security/zap-*.html', fingerprint: true, allowEmptyArchive: true
+        }
+      }
+    }
+
     stage('Approve promotion to prod') {
       steps {
         timeout(time: 30, unit: 'MINUTES') {
@@ -140,6 +165,7 @@ pipeline {
     failure {
       sh 'kubectl -n ${K8S_NS} get pods || true'
       sh 'kubectl -n ${K8S_NS} get events --sort-by=.lastTimestamp | tail -n 30 || true'
+      sh 'bash pipelines/notify.sh "FALLO pipeline STAGE #${BUILD_NUMBER}" "El build de stage fallo. Revisa: ${BUILD_URL}" || true'
     }
   }
 }

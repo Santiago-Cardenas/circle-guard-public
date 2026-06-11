@@ -56,6 +56,21 @@ pipeline {
       }
     }
 
+    stage('Analisis de calidad (SonarQube)') {
+      steps {
+        // El token de Sonar se guarda como credencial secreta en Jenkins.
+        withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
+          sh '''
+            set -e
+            ./gradlew sonar \
+              -Dsonar.host.url=http://host.docker.internal:9000 \
+              -Dsonar.token=${SONAR_TOKEN} \
+              --no-daemon --console=plain
+          '''
+        }
+      }
+    }
+
     stage('Build images') {
       steps {
         sh '''
@@ -63,6 +78,42 @@ pipeline {
           chmod +x infra/docker/build-all.sh
           TAG=${IMAGE_TAG} bash infra/docker/build-all.sh
         '''
+      }
+    }
+
+    stage('Escaneo de imagenes (Trivy)') {
+      steps {
+        // Trivy revisa las imagenes en busca de vulnerabilidades conocidas.
+        // Si encuentra HIGH o CRITICAL marca el build como inestable (no lo rompe).
+        sh '''
+          set +e
+          mkdir -p build/security
+          STATUS=0
+          for s in auth identity gateway promotion notification dashboard; do
+            echo "== Escaneando circleguard/${s}:${IMAGE_TAG} =="
+            docker run --rm \
+              -v /var/run/docker.sock:/var/run/docker.sock \
+              -v trivy-cache:/root/.cache/ \
+              aquasec/trivy:latest image \
+                --severity HIGH,CRITICAL \
+                --exit-code 1 \
+                --no-progress \
+                circleguard/${s}:${IMAGE_TAG} | tee build/security/trivy-${s}.txt
+            if [ "${PIPESTATUS:-$?}" != "0" ]; then STATUS=1; fi
+          done
+          if [ "${STATUS}" = "1" ]; then
+            echo "Trivy encontro vulnerabilidades HIGH/CRITICAL."
+            exit 1
+          fi
+        '''
+      }
+      post {
+        always {
+          archiveArtifacts artifacts: 'build/security/*', fingerprint: true, allowEmptyArchive: true
+        }
+        failure {
+          echo 'Hay vulnerabilidades en las imagenes; revisar reportes de Trivy.'
+        }
       }
     }
 
@@ -109,6 +160,8 @@ pipeline {
     failure {
       sh 'kubectl -n ${K8S_NS} get pods || true'
       sh 'kubectl -n ${K8S_NS} get events --sort-by=.lastTimestamp | tail -n 30 || true'
+      // Avisamos al equipo del fallo por correo (Mailhog).
+      sh 'bash pipelines/notify.sh "FALLO pipeline DEV #${BUILD_NUMBER}" "El build fallo. Revisa: ${BUILD_URL}" || true'
     }
   }
 }

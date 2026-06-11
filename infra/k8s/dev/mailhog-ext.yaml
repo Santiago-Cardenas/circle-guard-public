@@ -1,0 +1,14 @@
+# Servicio extra para Mailhog en dev.
+# El base deja Mailhog como ClusterIP (lo usan los microservicios por dentro).
+# Aqui lo exponemos como NodePort para que Jenkins (que esta fuera del cluster)
+# pueda mandarle los correos de aviso cuando un pipeline falla.
+apiVersion: v1
+kind: Service
+metadata:
+  name: mailhog-ext
+spec:
+  type: NodePort
+  selector: { app: mailhog }
+  ports:
+    - { name: smtp, port: 1025, targetPort: 1025, nodePort: 30025 }
+    - { name: ui,   port: 8025, targetPort: 8025, nodePort: 30825 }
