@@ -14,5 +14,38 @@ qr:
   secret: "my-qr-secret-key-for-dev-1234567890"
   expiration: 300
 
+# Feature Toggle: controla si se hace el chequeo de salud del usuario.
+# Se puede sobreescribir con la variable de entorno FEATURES_HEALTH_CHECK_ENABLED.
+features:
+  health-check-enabled: true
+
+# Configuracion del Circuit Breaker para la consulta a Redis.
+resilience4j:
+  circuitbreaker:
+    instances:
+      redisStatus:
+        # Mira las ultimas 10 llamadas para decidir.
+        sliding-window-size: 10
+        # Si el 50% o mas fallan, abre el circuito.
+        failure-rate-threshold: 50
+        # Necesita al menos 5 llamadas antes de calcular el porcentaje.
+        minimum-number-of-calls: 5
+        # Tiempo que el circuito se queda abierto antes de probar de nuevo.
+        wait-duration-in-open-state: 10s
+        # Llamadas de prueba cuando pasa a medio-abierto.
+        permitted-number-of-calls-in-half-open-state: 3
+        # Expone el estado del circuito en el health de actuator.
+        register-health-indicator: true
+
+# Exponemos endpoints de actuator para ver salud y estado del circuito.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,circuitbreakers
+  endpoint:
+    health:
+      show-details: always
+
 server:
   port: 8087
