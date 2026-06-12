@@ -124,6 +124,13 @@ pipeline {
         sh '''
           set -e
           kubectl apply -f infra/k8s/namespaces.yaml
+          # Aumentar cuota de memoria para acomodar todos los pods con sus limites explicitos.
+          # Terraform fijo 8Gi pero el LimitRange aplica 512Mi por defecto a pods sin limites,
+          # y los pods de BD mas los 6 servicios de app superan 8Gi en ciertas versiones.
+          kubectl -n ${K8S_NS} patch resourcequota cuota-dev \
+            --type=merge \
+            -p '{"spec":{"hard":{"limits.memory":"16Gi","limits.cpu":"8","requests.memory":"8Gi","requests.cpu":"4"}}}' \
+            2>/dev/null || true
           kubectl apply -k infra/k8s/dev
           kubectl -n ${K8S_NS} rollout status deployment --timeout=240s
         '''
