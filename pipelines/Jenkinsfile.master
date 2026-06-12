@@ -92,7 +92,9 @@ pipeline {
         sh '''
           set -e
           kubectl apply -f infra/k8s/namespaces.yaml
+          bash infra/k8s/security/gen-tls-secret.sh ${K8S_NS}
           kubectl apply -k infra/k8s/prod
+          kubectl apply -k infra/k8s/security -n ${K8S_NS}
           kubectl -n ${K8S_NS} rollout status deployment --timeout=300s
           kubectl -n ${K8S_NS} rollout restart deployment
           kubectl -n ${K8S_NS} rollout status deployment --timeout=300s

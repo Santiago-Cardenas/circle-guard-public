@@ -131,6 +131,15 @@ pipeline {
       }
     }
 
+    stage('Apply security manifests (dev)') {
+      steps {
+        sh '''
+          set -e
+          kubectl apply -k infra/k8s/security -n ${K8S_NS}
+        '''
+      }
+    }
+
     stage('Auto-promote dev -> stage') {
       steps {
         withCredentials([usernamePassword(credentialsId: 'github-pat',
