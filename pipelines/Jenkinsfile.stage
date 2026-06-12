@@ -49,7 +49,7 @@ pipeline {
         sh '''
           set -e
           chmod +x ./gradlew
-          ./gradlew test bootJar -x :tests:e2e:test --no-daemon --console=plain
+          ./gradlew test bootJar -x :tests:e2e:test --no-daemon --console=plain --warning-mode=none
           find services -path '*/build/libs/*.jar' ! -name '*-plain.jar' -printf '%p (%s bytes)\\n'
         '''
       }
@@ -87,21 +87,25 @@ pipeline {
       steps {
         sh '''
           set -e
-          # Wait for gateway to be healthy
-          echo "Waiting for gateway to be healthy..."
-          for i in {1..60}; do
+          # Wait for gateway to be healthy (max 120 seconds)
+          echo "Waiting for gateway to be healthy at ${GATEWAY_URL}/actuator/health..."
+          for i in $(seq 1 120); do
             if curl -f -s ${GATEWAY_URL}/actuator/health > /dev/null 2>&1; then
               echo "✓ Gateway healthy after $i seconds"
               break
             fi
-            echo "Attempt $i/60: Gateway not ready yet..."
+            if [ $i -eq 120 ]; then
+              echo "✗ Gateway failed to respond after 120 seconds. Trying E2E anyway..."
+              break
+            fi
+            [ $((i % 10)) -eq 0 ] && echo "Waiting... ($i/120s)"
             sleep 1
           done
           ./gradlew :tests:e2e:test -PrunE2E=true \
             -DgatewayUrl=${GATEWAY_URL} \
             -DauthUrl=${AUTH_URL} \
             -DdashboardUrl=${DASHBOARD_URL} \
-            --no-daemon --console=plain
+            --no-daemon --console=plain --warning-mode=none
         '''
       }
       post {
