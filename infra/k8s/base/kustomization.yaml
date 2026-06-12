@@ -7,6 +7,7 @@ resources:
   - 20-kafka.yaml
   - 30-services.yaml
   - 40-observability.yaml
+  - 50-hpa.yaml
 
 commonLabels:
   project: circleguard
