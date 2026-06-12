@@ -1,0 +1,38 @@
+# =====================================================================
+# FASE 5 — Hardening: TLS para servicios expuestos.
+#
+# Se expone el gateway por HTTPS mediante un Ingress con terminación
+# TLS. El certificado (autofirmado para la demo) se guarda en el Secret
+# `circleguard-tls` generado por `gen-tls-secret.sh`.
+#
+# Requiere un Ingress Controller (nginx). En Docker Desktop se instala:
+#   kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.11.1/deploy/static/provider/cloud/deploy.yaml
+#
+# Luego, host de prueba (añadir a C:\Windows\System32\drivers\etc\hosts):
+#   127.0.0.1   circleguard.local
+# y acceder a https://circleguard.local/
+# =====================================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: circleguard-gateway-tls
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - circleguard.local
+      secretName: circleguard-tls
+  rules:
+    - host: circleguard.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gateway
+                port:
+                  number: 8087

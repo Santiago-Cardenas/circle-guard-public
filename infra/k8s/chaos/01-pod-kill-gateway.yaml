@@ -1,0 +1,26 @@
+# =====================================================================
+# Experimento 1: PodChaos — Mata el pod de gateway cada 2 minutos
+#
+# Objetivo: verificar que Kubernetes reinicia el pod automaticamente
+# y que el HPA mantiene la disponibilidad del servicio.
+#
+# Aplica con: kubectl apply -f infra/k8s/chaos/01-pod-kill-gateway.yaml -n circleguard-dev
+# Detener:    kubectl delete -f infra/k8s/chaos/01-pod-kill-gateway.yaml -n circleguard-dev
+# Observar:   kubectl get pods -n circleguard-dev -w
+# =====================================================================
+apiVersion: chaos-mesh.org/v1alpha1
+kind: PodChaos
+metadata:
+  name: gateway-pod-kill
+  namespace: circleguard-dev
+spec:
+  action: pod-kill
+  mode: one
+  selector:
+    namespaces:
+      - circleguard-dev
+    labelSelectors:
+      app: gateway
+  duration: "30s"
+  scheduler:
+    cron: "@every 2m"

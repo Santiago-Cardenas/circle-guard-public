@@ -76,8 +76,7 @@ pipeline {
           set -e
           kubectl apply -f infra/k8s/namespaces.yaml
           kubectl apply -k infra/k8s/stage
-          kubectl -n ${K8S_NS} rollout status deployment --timeout=300s
-          kubectl -n ${K8S_NS} rollout restart deployment
+          kubectl apply -k infra/k8s/security -n ${K8S_NS}
           kubectl -n ${K8S_NS} rollout status deployment --timeout=300s
         '''
       }
@@ -174,8 +173,13 @@ pipeline {
   }
 
   post {
+    always {
+      // Escala todo a 0 replicas para liberar RAM. Stage solo corre durante
+      // el pipeline; los pods no deben quedar vivos entre ejecuciones.
+      sh 'kubectl -n ${K8S_NS} scale deployment --all --replicas=0 2>/dev/null || true'
+    }
     success {
-      echo "Pipeline STAGE OK — imágenes :${IMAGE_TAG} desplegadas en ${K8S_NS} y E2E verde."
+      echo "Pipeline STAGE OK — E2E verde. Stage escalado a 0 replicas para ahorrar recursos."
     }
     failure {
       sh 'kubectl -n ${K8S_NS} get pods || true'
