@@ -194,6 +194,10 @@ spec:
         prometheus.io/path: "/actuator/prometheus"
     spec:
       enableServiceLinks: false
+      initContainers:
+        - name: wait-for-neo4j
+          image: busybox:1.36
+          command: ['sh', '-c', 'until nc -zw3 neo4j 7687; do echo "waiting neo4j..."; sleep 3; done']
       containers:
         - name: promotion
           image: circleguard/promotion:dev
