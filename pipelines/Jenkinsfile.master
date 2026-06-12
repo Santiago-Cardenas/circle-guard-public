@@ -114,17 +114,17 @@ pipeline {
           set -e
           # Wait for gateway to be healthy (max 120 seconds)
           echo "Waiting for gateway to be healthy at ${GATEWAY_URL}/actuator/health..."
-          for i in $(seq 1 120); do
-            if curl -f -s ${GATEWAY_URL}/actuator/health > /dev/null 2>&1; then
-              echo "✓ Gateway healthy after $i seconds"
+          for i in $(seq 1 60); do
+            if curl -f -s --max-time 5 ${GATEWAY_URL}/actuator/health > /dev/null 2>&1; then
+              echo "Gateway healthy after ${i} checks"
               break
             fi
-            if [ $i -eq 120 ]; then
-              echo "✗ Gateway failed to respond after 120 seconds. Trying E2E anyway..."
+            if [ $i -eq 60 ]; then
+              echo "Gateway did not respond after 60 attempts. Trying E2E anyway..."
               break
             fi
-            [ $((i % 10)) -eq 0 ] && echo "Waiting... ($i/120s)"
-            sleep 1
+            [ $((i % 10)) -eq 0 ] && echo "Still waiting... (attempt ${i}/60)"
+            sleep 3
           done
           ./gradlew :tests:e2e:test -PrunE2E=true \
             -DgatewayUrl=${GATEWAY_URL} \
@@ -162,14 +162,14 @@ pipeline {
 
           # Commits directos en master (los auto-promote merges que integran cada ciclo)
           DIRECT_CHANGES=$(git log ${RANGE} --first-parent \
-            --pretty=format:'- \`%h\` %s (%ad)' --date=short 2>/dev/null || true)
+            --pretty=format:'- %h %s (%ad)' --date=short 2>/dev/null || true)
           # Commits individuales feat/fix dentro del rango
           DETAIL_CHANGES=$(git log ${RANGE} --no-merges \
-            --pretty=format:'  - \`%h\` %s' 2>/dev/null || true)
+            --pretty=format:'  - %h %s' 2>/dev/null || true)
           # Si el rango no arroja nada (tag == HEAD al primer run), mostrar ultimos 10 commits
           if [ -z "${DIRECT_CHANGES}" ] && [ -z "${DETAIL_CHANGES}" ]; then
             DIRECT_CHANGES=$(git log -10 --first-parent \
-              --pretty=format:'- \`%h\` %s (%ad)' --date=short 2>/dev/null || true)
+              --pretty=format:'- %h %s (%ad)' --date=short 2>/dev/null || true)
           fi
           COMMIT_COUNT=$(git log ${RANGE} --oneline 2>/dev/null | wc -l | tr -d ' ')
 
@@ -180,14 +180,14 @@ pipeline {
             echo "|-------|-------|"
             echo "| Fecha | $(date -u +'%Y-%m-%d %H:%M:%S UTC') |"
             echo "| Build | #${BUILD_NUMBER} |"
-            echo "| Commit | \`$(git rev-parse --short HEAD)\` |"
+            echo "| Commit | $(git rev-parse --short HEAD) |"
             echo "| Rama | master |"
             echo "| Ambiente | circleguard-prod |"
             echo "| Commits en release | ${COMMIT_COUNT} |"
             echo ""
             echo "## Imagenes desplegadas"
             for s in auth identity gateway promotion notification dashboard; do
-              echo "- \`circleguard/${s}:prod\`"
+              echo "- circleguard/${s}:prod"
             done
             echo ""
             echo "## Cambios ${RANGE_DESC}"

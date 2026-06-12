@@ -88,17 +88,17 @@ pipeline {
           set -e
           # Wait for gateway to be healthy (max 120 seconds)
           echo "Waiting for gateway to be healthy at ${GATEWAY_URL}/actuator/health..."
-          for i in $(seq 1 120); do
-            if curl -f -s ${GATEWAY_URL}/actuator/health > /dev/null 2>&1; then
-              echo "✓ Gateway healthy after $i seconds"
+          for i in $(seq 1 60); do
+            if curl -f -s --max-time 5 ${GATEWAY_URL}/actuator/health > /dev/null 2>&1; then
+              echo "Gateway healthy after ${i} checks"
               break
             fi
-            if [ $i -eq 120 ]; then
-              echo "✗ Gateway failed to respond after 120 seconds. Trying E2E anyway..."
+            if [ $i -eq 60 ]; then
+              echo "Gateway did not respond after 60 attempts. Trying E2E anyway..."
               break
             fi
-            [ $((i % 10)) -eq 0 ] && echo "Waiting... ($i/120s)"
-            sleep 1
+            [ $((i % 10)) -eq 0 ] && echo "Still waiting... (attempt ${i}/60)"
+            sleep 3
           done
           ./gradlew :tests:e2e:test -PrunE2E=true \
             -DgatewayUrl=${GATEWAY_URL} \
