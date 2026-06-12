@@ -59,9 +59,15 @@ spec:
         - name: neo4j
           image: neo4j:5.26
           ports: [{ containerPort: 7474 }, { containerPort: 7687 }]
+          resources:
+            requests: { cpu: "200m", memory: "384Mi" }
+            limits:   { cpu: "1",    memory: "512Mi" }
           env:
             - { name: NEO4J_AUTH, value: "neo4j/password" }
             - { name: NEO4J_PLUGINS, value: '["apoc"]' }
+            - { name: NEO4J_server_memory_heap_initial__size, value: "128m" }
+            - { name: NEO4J_server_memory_heap_max__size,     value: "256m" }
+            - { name: NEO4J_server_memory_pagecache__size,    value: "64m" }
 ---
 apiVersion: v1
 kind: Service

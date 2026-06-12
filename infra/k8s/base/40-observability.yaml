@@ -22,8 +22,6 @@ data:
 
   # --- Métricas Prometheus ---
   MANAGEMENT_PROMETHEUS_METRICS_EXPORT_ENABLED: "true"
-  # Habilita el histograma de latencias HTTP (percentiles p50/p95/p99 en Grafana)
-  MANAGEMENT_METRICS_DISTRIBUTION_PERCENTILES_HISTOGRAM_HTTP_SERVER_REQUESTS: "true"
 
   # --- Tracing distribuido (Brave -> Jaeger vía Zipkin) ---
   # 1.0 = se muestrea el 100% de las peticiones (ideal para la demo).
