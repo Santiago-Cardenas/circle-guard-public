@@ -146,6 +146,22 @@ pipeline {
       }
     }
 
+    stage('Apply Istio policies (dev)') {
+      steps {
+        sh '''
+          # Solo aplica si Istio esta instalado (CRDs presentes).
+          if kubectl get crd virtualservices.networking.istio.io >/dev/null 2>&1; then
+            echo "Istio detectado — aplicando politicas de trafico y mTLS..."
+            kubectl apply -f infra/k8s/istio/01-mtls-peer-auth.yaml
+            kubectl apply -f infra/k8s/istio/02-virtual-services.yaml
+            kubectl apply -f infra/k8s/istio/03-destination-rules.yaml
+          else
+            echo "Istio no instalado — saltando etapa. Ejecuta infra/k8s/istio/00-install-istio.sh para instalarlo."
+          fi
+        '''
+      }
+    }
+
     stage('Auto-promote dev -> stage') {
       steps {
         withCredentials([usernamePassword(credentialsId: 'github-pat',
