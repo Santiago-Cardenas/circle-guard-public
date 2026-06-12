@@ -48,15 +48,18 @@ pipeline {
       steps {
         sh '''
           set -e
-          echo "Checking critical deployments in stage (gateway, auth, dashboard)..."
-          kubectl -n circleguard-stage get deploy gateway auth dashboard
-          not_ready=$(kubectl -n circleguard-stage get deploy -o json | \
-            python3 -c 'import sys,json; d=json.load(sys.stdin); critical=["gateway","auth","dashboard"]; print(sum(1 for x in d["items"] if x["metadata"]["name"] in critical and (x["status"].get("readyReplicas") or 0) < (x["spec"].get("replicas") or 1)))')
-          if [ "${not_ready}" != "0" ]; then
-            echo "ERROR: hay ${not_ready} deployment(s) critico(s) no-ready en stage. Aborto promocion a prod."
+          # Stage se escala a 0 despues de cada pipeline para ahorrar RAM.
+          # Verificamos que el ultimo build del pipeline de stage fue exitoso
+          # consultando la Jenkins API en lugar de depender de pods corriendo.
+          STAGE_STATUS=$(curl -s "http://host.docker.internal:8080/job/circleguard-stage/lastBuild/api/json" \
+            | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('result','UNKNOWN'))" 2>/dev/null || echo "UNKNOWN")
+          echo "Ultimo resultado del pipeline Stage: ${STAGE_STATUS}"
+          if [ "${STAGE_STATUS}" != "SUCCESS" ]; then
+            echo "ERROR: el pipeline de stage no termino en SUCCESS (result=${STAGE_STATUS})."
+            echo "Ejecuta y aprueba el pipeline de stage antes de promover a prod."
             exit 1
           fi
-          echo "✓ Todos los deployments criticos en stage estan listos."
+          echo "✓ Pipeline de stage verificado como exitoso via Jenkins API."
         '''
       }
     }
@@ -227,8 +230,13 @@ EOF
   }
 
   post {
+    always {
+      // Escala prod a 0 replicas para liberar RAM en local.
+      // En un entorno real de prod esto NO se haria.
+      sh 'kubectl -n ${K8S_NS} scale deployment --all --replicas=0 2>/dev/null || true'
+    }
     success {
-      echo "Pipeline MASTER OK -- imagenes :${IMAGE_TAG} desplegadas en ${K8S_NS}, release publicada."
+      echo "Pipeline MASTER OK -- release publicada. Prod escalado a 0 para ahorrar recursos locales."
     }
     failure {
       sh 'kubectl -n ${K8S_NS} get pods || true'
