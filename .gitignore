@@ -51,6 +51,7 @@ neo4jdata/
 
 # Personal notes (no commitear)
 _local/
+run-sonar-local.ps1
 
 # Documentacion de trabajo (no se commitea al repo)
 docs/final/

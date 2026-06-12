@@ -110,6 +110,7 @@ pipeline {
           set +e
           mkdir -p build/security
           docker run --rm \
+            --add-host=host.docker.internal:host-gateway \
             -v "$(pwd)/build/security:/zap/wrk:rw" \
             ghcr.io/zaproxy/zaproxy:stable \
             zap-baseline.py \
