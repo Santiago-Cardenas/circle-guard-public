@@ -1,7 +1,6 @@
 spring:
   application:
     name: circleguard-gateway-service
-    # demo: sustentacion IngeSoft V — pipeline trigger
   data:
     redis:
       host: localhost
