@@ -4,6 +4,22 @@ plugins {
     kotlin("jvm") version "1.9.24" apply false
     kotlin("plugin.spring") version "1.9.24" apply false
     kotlin("plugin.jpa") version "1.9.24" apply false
+    // Plugin para mandar el analisis de calidad a SonarQube
+    id("org.sonarqube") version "5.1.0.4882"
+}
+
+// Configuracion de SonarQube para todo el proyecto.
+// El servidor corre local en http://localhost:9000 (contenedor docker).
+sonar {
+    properties {
+        property("sonar.projectKey", "circleguard")
+        property("sonar.projectName", "CircleGuard")
+        // Junta los reportes de cobertura de todos los servicios
+        property(
+            "sonar.coverage.jacoco.xmlReportPaths",
+            "**/build/reports/jacoco/test/jacocoTestReport.xml"
+        )
+    }
 }
 
 allprojects {
@@ -18,6 +34,8 @@ allprojects {
 subprojects {
     apply(plugin = "java")
     apply(plugin = "org.jetbrains.kotlin.jvm")
+    // JaCoCo mide la cobertura de las pruebas en cada servicio
+    apply(plugin = "jacoco")
     extensions.configure<JavaPluginExtension> {
         toolchain {
             languageVersion.set(JavaLanguageVersion.of(21))
@@ -36,6 +54,22 @@ subprojects {
         "testRuntimeOnly"("com.h2database:h2")
     }
 
+    // ── FASE 5 (Observabilidad) ──────────────────────────────────────────
+    // Se instrumentan TODOS los microservicios de forma uniforme para no
+    // tocar cada build.gradle por separado:
+    //   • Actuator        -> endpoints /actuator/health, /prometheus, etc.
+    //   • Prometheus      -> registro de métricas en formato Prometheus.
+    //   • Tracing (Brave) -> trazas distribuidas enviadas a Jaeger (Zipkin v2).
+    // Solo se aplica a módulos con plugin de Spring Boot (los que tienen app).
+    plugins.withId("org.springframework.boot") {
+        dependencies {
+            "implementation"("org.springframework.boot:spring-boot-starter-actuator")
+            "implementation"("io.micrometer:micrometer-registry-prometheus")
+            "implementation"("io.micrometer:micrometer-tracing-bridge-brave")
+            "implementation"("io.zipkin.reporter2:zipkin-reporter-brave")
+        }
+    }
+
     tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
         kotlinOptions {
             freeCompilerArgs = listOf("-Xjsr305=strict")
@@ -45,5 +79,18 @@ subprojects {
 
     tasks.withType<Test> {
         useJUnitPlatform()
+    }
+
+    // Despues de correr los tests, genera el reporte de cobertura en XML
+    // (que es el que lee SonarQube).
+    tasks.withType<Test> {
+        finalizedBy(tasks.withType<JacocoReport>())
+    }
+    tasks.withType<JacocoReport> {
+        dependsOn(tasks.withType<Test>())
+        reports {
+            xml.required.set(true)
+            html.required.set(true)
+        }
     }
 }

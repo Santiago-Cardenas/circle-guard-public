@@ -45,13 +45,30 @@ pipeline {
         sh '''
           set -e
           chmod +x ./gradlew
-          ./gradlew test bootJar -x :tests:e2e:test --no-daemon --console=plain
+          ./gradlew test bootJar -x :tests:e2e:test --no-daemon --console=plain --warning-mode=none
           find services -path '*/build/libs/*.jar' ! -name '*-plain.jar' -printf '%p (%s bytes)\\n'
         '''
       }
       post {
         always {
           junit allowEmptyResults: true, testResults: '**/build/test-results/test/*.xml'
+        }
+      }
+    }
+
+    stage('Analisis de calidad (SonarQube)') {
+      steps {
+        // El token de Sonar se guarda como credencial secreta en Jenkins.
+        withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
+          sh '''
+            set -e
+            ./gradlew sonar \
+              -Dsonar.projectKey=circleguard \
+              -Dsonar.projectName=CircleGuard \
+              -Dsonar.host.url=http://host.docker.internal:9000 \
+              -Dsonar.token=${SONAR_TOKEN} \
+              --no-daemon --console=plain --warning-mode=none
+          '''
         }
       }
     }
@@ -66,6 +83,42 @@ pipeline {
       }
     }
 
+    stage('Escaneo de imagenes (Trivy)') {
+      steps {
+        // Trivy revisa las imagenes en busca de vulnerabilidades conocidas.
+        // Si encuentra HIGH o CRITICAL marca el build como inestable (no lo rompe).
+        sh '''
+          set +e
+          mkdir -p build/security
+          STATUS=0
+          for s in auth identity gateway promotion notification dashboard; do
+            echo "== Escaneando circleguard/${s}:${IMAGE_TAG} =="
+            docker run --rm \
+              -v /var/run/docker.sock:/var/run/docker.sock \
+              -v trivy-cache:/root/.cache/ \
+              aquasec/trivy:latest image \
+                --severity HIGH,CRITICAL \
+                --exit-code 1 \
+                --no-progress \
+                circleguard/${s}:${IMAGE_TAG} | tee build/security/trivy-${s}.txt
+            if [ "${PIPESTATUS:-$?}" != "0" ]; then STATUS=1; fi
+          done
+          if [ "${STATUS}" = "1" ]; then
+            echo "Trivy encontro vulnerabilidades HIGH/CRITICAL."
+            exit 1
+          fi
+        '''
+      }
+      post {
+        always {
+          archiveArtifacts artifacts: 'build/security/*', fingerprint: true, allowEmptyArchive: true
+        }
+        failure {
+          echo 'Hay vulnerabilidades en las imagenes; revisar reportes de Trivy.'
+        }
+      }
+    }
+
     stage('Deploy to circleguard-dev') {
       steps {
         sh '''
@@ -74,6 +127,15 @@ pipeline {
           kubectl apply -k infra/k8s/dev
           kubectl -n ${K8S_NS} rollout restart deployment
           kubectl -n ${K8S_NS} rollout status deployment --timeout=240s
+        '''
+      }
+    }
+
+    stage('Apply security manifests (dev)') {
+      steps {
+        sh '''
+          set -e
+          kubectl apply -k infra/k8s/security -n ${K8S_NS}
         '''
       }
     }
@@ -109,6 +171,8 @@ pipeline {
     failure {
       sh 'kubectl -n ${K8S_NS} get pods || true'
       sh 'kubectl -n ${K8S_NS} get events --sort-by=.lastTimestamp | tail -n 30 || true'
+      // Avisamos al equipo del fallo por correo (Mailhog).
+      sh 'bash pipelines/notify.sh "FALLO pipeline DEV #${BUILD_NUMBER}" "El build fallo. Revisa: ${BUILD_URL}" || true'
     }
   }
 }

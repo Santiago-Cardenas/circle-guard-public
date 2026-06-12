@@ -19,7 +19,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Pruebas unitarias (M5a — Taller 2) para JwtTokenService.
+ * Pruebas unitarias para JwtTokenService.
  * No usan Spring; son JUnit 5 puro contra la lógica de generación
  * y firma JWT del servicio de autenticación.
  */

@@ -1,5 +1,5 @@
 // Pipeline MASTER: build + test + deploy a circleguard-prod, corre E2E,
-// genera release notes y publica un GitHub Release con tag vYYYY.MM.DD-N.
+// genera release notes y publica un GitHub Release con tag semantico vX.Y.Z.
 pipeline {
   agent any
 
@@ -48,13 +48,15 @@ pipeline {
       steps {
         sh '''
           set -e
-          kubectl -n circleguard-stage get deploy
+          echo "Checking critical deployments in stage (gateway, auth, dashboard)..."
+          kubectl -n circleguard-stage get deploy gateway auth dashboard
           not_ready=$(kubectl -n circleguard-stage get deploy -o json | \
-            python3 -c "import sys,json; d=json.load(sys.stdin); print(sum(1 for x in d['items'] if (x['status'].get('readyReplicas') or 0) < (x['spec'].get('replicas') or 1)))")
+            python3 -c 'import sys,json; d=json.load(sys.stdin); critical=["gateway","auth","dashboard"]; print(sum(1 for x in d["items"] if x["metadata"]["name"] in critical and (x["status"].get("readyReplicas") or 0) < (x["spec"].get("replicas") or 1)))')
           if [ "${not_ready}" != "0" ]; then
-            echo "ERROR: hay ${not_ready} deployment(s) no-ready en stage. Aborto promocion a prod."
+            echo "ERROR: hay ${not_ready} deployment(s) critico(s) no-ready en stage. Aborto promocion a prod."
             exit 1
           fi
+          echo "✓ Todos los deployments criticos en stage estan listos."
         '''
       }
     }
@@ -64,7 +66,7 @@ pipeline {
         sh '''
           set -e
           chmod +x ./gradlew
-          ./gradlew test bootJar -x :tests:e2e:test --no-daemon --console=plain
+          ./gradlew test bootJar -x :tests:e2e:test --no-daemon --console=plain --warning-mode=none
           find services -path '*/build/libs/*.jar' ! -name '*-plain.jar' -printf '%p (%s bytes)\\n'
         '''
       }
@@ -90,7 +92,9 @@ pipeline {
         sh '''
           set -e
           kubectl apply -f infra/k8s/namespaces.yaml
+          bash infra/k8s/security/gen-tls-secret.sh ${K8S_NS}
           kubectl apply -k infra/k8s/prod
+          kubectl apply -k infra/k8s/security -n ${K8S_NS}
           kubectl -n ${K8S_NS} rollout status deployment --timeout=300s
           kubectl -n ${K8S_NS} rollout restart deployment
           kubectl -n ${K8S_NS} rollout status deployment --timeout=300s
@@ -102,11 +106,25 @@ pipeline {
       steps {
         sh '''
           set -e
+          # Wait for gateway to be healthy (max 120 seconds)
+          echo "Waiting for gateway to be healthy at ${GATEWAY_URL}/actuator/health..."
+          for i in $(seq 1 120); do
+            if curl -f -s ${GATEWAY_URL}/actuator/health > /dev/null 2>&1; then
+              echo "✓ Gateway healthy after $i seconds"
+              break
+            fi
+            if [ $i -eq 120 ]; then
+              echo "✗ Gateway failed to respond after 120 seconds. Trying E2E anyway..."
+              break
+            fi
+            [ $((i % 10)) -eq 0 ] && echo "Waiting... ($i/120s)"
+            sleep 1
+          done
           ./gradlew :tests:e2e:test -PrunE2E=true \
             -DgatewayUrl=${GATEWAY_URL} \
             -DauthUrl=${AUTH_URL} \
             -DdashboardUrl=${DASHBOARD_URL} \
-            --no-daemon --console=plain
+            --no-daemon --console=plain --warning-mode=none
         '''
       }
       post {
@@ -121,8 +139,11 @@ pipeline {
         sh '''
           set -e
           mkdir -p build/release
-          RELEASE_VERSION=$(date +v%Y.%m.%d)-${BUILD_NUMBER}
+          chmod +x pipelines/semver.sh
+          # Version semantica calculada a partir de los commits (Conventional Commits).
+          RELEASE_VERSION=$(bash pipelines/semver.sh)
           echo ${RELEASE_VERSION} > build/release/VERSION
+          echo "Nueva version semantica: ${RELEASE_VERSION}"
 
           PREV_TAG=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)
           if [ -z "${PREV_TAG}" ]; then
@@ -214,6 +235,7 @@ EOF
     failure {
       sh 'kubectl -n ${K8S_NS} get pods || true'
       sh 'kubectl -n ${K8S_NS} get events --sort-by=.lastTimestamp | tail -n 30 || true'
+      sh 'bash pipelines/notify.sh "FALLO pipeline MASTER #${BUILD_NUMBER}" "El build de produccion fallo. Revisa: ${BUILD_URL}" || true'
     }
   }
 }
