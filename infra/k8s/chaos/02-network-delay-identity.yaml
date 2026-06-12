@@ -1,0 +1,29 @@
+# =====================================================================
+# Experimento 2: NetworkChaos — Inyecta latencia 500ms al servicio identity
+#
+# Objetivo: verificar que el Circuit Breaker del gateway abre correctamente
+# cuando identity responde lento, y activa el fallback de Feature Toggle.
+#
+# Aplica con: kubectl apply -f infra/k8s/chaos/02-network-delay-identity.yaml -n circleguard-dev
+# Detener:    kubectl delete -f infra/k8s/chaos/02-network-delay-identity.yaml -n circleguard-dev
+# Observar:   curl http://localhost:30087/actuator/circuitbreakers
+# =====================================================================
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: identity-network-delay
+  namespace: circleguard-dev
+spec:
+  action: delay
+  mode: all
+  selector:
+    namespaces:
+      - circleguard-dev
+    labelSelectors:
+      app: identity
+  delay:
+    latency: "500ms"
+    correlation: "25"
+    jitter: "100ms"
+  duration: "3m"
+  direction: both

@@ -1,0 +1,27 @@
+# =====================================================================
+# Experimento 3: StressChaos — Estresa CPU del servicio promotion al 80%
+#
+# Objetivo: verificar que el HPA de autoscaling detecta el pico de CPU
+# y escala horizontalmente el servicio de promotion.
+#
+# Aplica con: kubectl apply -f infra/k8s/chaos/03-cpu-stress-promotion.yaml -n circleguard-dev
+# Detener:    kubectl delete -f infra/k8s/chaos/03-cpu-stress-promotion.yaml -n circleguard-dev
+# Observar:   kubectl get hpa -n circleguard-dev -w
+# =====================================================================
+apiVersion: chaos-mesh.org/v1alpha1
+kind: StressChaos
+metadata:
+  name: promotion-cpu-stress
+  namespace: circleguard-dev
+spec:
+  mode: one
+  selector:
+    namespaces:
+      - circleguard-dev
+    labelSelectors:
+      app: promotion
+  stressors:
+    cpu:
+      workers: 2
+      load: 80
+  duration: "5m"
