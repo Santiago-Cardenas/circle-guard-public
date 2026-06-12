@@ -1,0 +1,63 @@
+# =====================================================================
+# FASE 6 Bono D — Overlay cloud (AWS EKS / Azure AKS)
+#
+# Adapta el despliegue base para ejecutarse en un cluster cloud:
+# - Namespace circleguard-cloud
+# - imagePullPolicy: Always (imagenes desde registry publico/privado)
+# - Las imagenes deben subirse previamente a Docker Hub o ECR/ACR:
+#     docker tag circleguard/auth:prod <registry>/circleguard/auth:cloud
+#     docker push <registry>/circleguard/auth:cloud
+# =====================================================================
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: circleguard-cloud
+
+resources:
+  - ../base
+
+commonLabels:
+  env: cloud
+
+images:
+  - { name: circleguard/auth,         newTag: cloud }
+  - { name: circleguard/identity,     newTag: cloud }
+  - { name: circleguard/gateway,      newTag: cloud }
+  - { name: circleguard/promotion,    newTag: cloud }
+  - { name: circleguard/notification, newTag: cloud }
+  - { name: circleguard/dashboard,    newTag: cloud }
+
+patches:
+  # En cloud las imagenes vienen de un registry — siempre hacer pull.
+  - patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Always
+    target:
+      kind: Deployment
+      labelSelector: "app in (auth,identity,gateway,promotion,notification,dashboard)"
+
+  # Gateway y auth usan LoadBalancer en cloud en vez de NodePort.
+  - patch: |-
+      - op: replace
+        path: /spec/type
+        value: LoadBalancer
+    target:
+      kind: Service
+      name: gateway
+
+  - patch: |-
+      - op: replace
+        path: /spec/type
+        value: LoadBalancer
+    target:
+      kind: Service
+      name: auth
+
+  - patch: |-
+      - op: replace
+        path: /spec/type
+        value: LoadBalancer
+    target:
+      kind: Service
+      name: dashboard
