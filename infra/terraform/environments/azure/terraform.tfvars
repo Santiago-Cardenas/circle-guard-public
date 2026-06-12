@@ -1,5 +1,5 @@
-location            = "eastus"
+location            = "eastus2"
 cluster_name        = "circleguard-aks"
 resource_group_name = "circleguard-rg"
-node_vm_size        = "Standard_B2s"
-node_count          = 2
+node_vm_size        = "Standard_D2s_v3"
+node_count          = 1

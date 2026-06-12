@@ -55,6 +55,9 @@ data:
       external_labels:
         cluster: circleguard-local
 
+    rule_files:
+      - "/etc/prometheus/rules/*.yml"
+
     scrape_configs:
       # ---- El propio Prometheus ----
       - job_name: 'prometheus'
@@ -95,6 +98,50 @@ data:
             action: replace
             target_label: pod
 ---
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-rules
+  namespace: circleguard-monitoring
+data:
+  circleguard.yml: |
+    groups:
+      - name: circleguard.infra
+        rules:
+          - alert: PodDown
+            expr: up{job="circleguard-services"} == 0
+            for: 1m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Servicio {{ $labels.app }} caído"
+              description: "El pod {{ $labels.pod }} lleva >1 min sin responder."
+
+          - alert: HighErrorRate
+            expr: |
+              sum(rate(http_server_requests_seconds_count{status=~"5.."}[2m]))
+              /
+              sum(rate(http_server_requests_seconds_count[2m])) > 0.10
+            for: 2m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Tasa de errores HTTP >10%"
+              description: "Más del 10% de las solicitudes devuelven 5xx."
+
+      - name: circleguard.negocio
+        rules:
+          - alert: AltaTasaBloqueos
+            expr: |
+              sum(rate(circleguard_validation_blocked_total[5m])) > 5
+            for: 1m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Muchos bloqueos de acceso (>5/min)"
+              description: "Puede indicar un brote activo o una prueba de carga."
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -128,6 +175,7 @@ spec:
             limits:   { cpu: "500m", memory: "512Mi" }
           volumeMounts:
             - { name: config, mountPath: /etc/prometheus }
+            - { name: rules,  mountPath: /etc/prometheus/rules }
             - { name: data,   mountPath: /prometheus }
           readinessProbe:
             httpGet: { path: /-/ready, port: 9090 }
@@ -139,6 +187,7 @@ spec:
             periodSeconds: 15
       volumes:
         - { name: config, configMap: { name: prometheus-config } }
+        - { name: rules,  configMap: { name: prometheus-rules } }
         - { name: data,   emptyDir: {} }
 ---
 apiVersion: v1
