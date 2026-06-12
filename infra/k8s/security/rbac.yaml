@@ -1,0 +1,62 @@
+# =====================================================================
+# FASE 5 — Hardening: RBAC (mínimo privilegio) para los namespaces de
+# aplicación. Se crea una ServiceAccount dedicada para los pods de
+# CircleGuard en lugar de usar la `default`, y un Role acotado que solo
+# permite LEER la config/secretos de su propio namespace.
+#
+# Además se define un Role de "desarrollador" de SOLO LECTURA, pensado
+# para dar acceso de observación al equipo sin permitir cambios.
+#
+# Aplicar a cada namespace, p.ej.:
+#   kubectl apply -n circleguard-prod -f infra/k8s/security/rbac.yaml
+# =====================================================================
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: circleguard-app
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: circleguard-app-reader
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps", "secrets"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: circleguard-app-reader-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: circleguard-app-reader
+subjects:
+  - kind: ServiceAccount
+    name: circleguard-app
+---
+# ----- Role de SOLO LECTURA para desarrolladores / operadores -----
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: circleguard-developer-readonly
+rules:
+  - apiGroups: ["", "apps", "batch"]
+    resources: ["pods", "pods/log", "services", "deployments", "replicasets", "configmaps", "events"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: circleguard-developer-readonly-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: circleguard-developer-readonly
+subjects:
+  # Grupo de ejemplo: en un cluster real se mapea a usuarios/OIDC.
+  - kind: Group
+    name: circleguard:developers
+    apiGroup: rbac.authorization.k8s.io

@@ -49,7 +49,7 @@ pipeline {
         sh '''
           set -e
           chmod +x ./gradlew
-          ./gradlew test bootJar -x :tests:e2e:test --no-daemon --console=plain --warning-mode=none
+          ./gradlew test bootJar -x :tests:e2e:test --no-daemon --console=plain --warning-mode=none --warning-mode=none
           find services -path '*/build/libs/*.jar' ! -name '*-plain.jar' -printf '%p (%s bytes)\\n'
         '''
       }

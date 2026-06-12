@@ -1,0 +1,187 @@
+# =====================================================================
+# FASE 5 — Grafana (visualización de métricas)
+#
+# Se autoprovisiona:
+#   • Datasource Prometheus (métricas) y Jaeger (trazas).
+#   • Un dashboard "CircleGuard Overview" con métricas TÉCNICAS
+#     (latencia HTTP p95, memoria JVM, tasa de peticiones) y de NEGOCIO
+#     (logins, validaciones de acceso en el gateway).
+# Credenciales demo: admin / circleguard (cámbialas en prod real).
+# =====================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: circleguard-monitoring
+data:
+  datasources.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: http://prometheus.circleguard-monitoring.svc.cluster.local:9090
+        isDefault: true
+      - name: Jaeger
+        type: jaeger
+        access: proxy
+        url: http://jaeger-query.circleguard-monitoring.svc.cluster.local:16686
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-provider
+  namespace: circleguard-monitoring
+data:
+  provider.yaml: |
+    apiVersion: 1
+    providers:
+      - name: 'CircleGuard'
+        orgId: 1
+        folder: 'CircleGuard'
+        type: file
+        disableDeletion: false
+        editable: true
+        options:
+          path: /var/lib/grafana/dashboards
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards
+  namespace: circleguard-monitoring
+data:
+  circleguard-overview.json: |
+    {
+      "annotations": { "list": [] },
+      "editable": true,
+      "panels": [
+        {
+          "title": "Tasa de peticiones HTTP (req/s) por servicio",
+          "type": "timeseries",
+          "datasource": "Prometheus",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+          "targets": [
+            { "expr": "sum(rate(http_server_requests_seconds_count[1m])) by (app)", "legendFormat": "{{app}}" }
+          ]
+        },
+        {
+          "title": "Latencia HTTP p95 (s) por servicio",
+          "type": "timeseries",
+          "datasource": "Prometheus",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+          "targets": [
+            { "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket[5m])) by (le, app))", "legendFormat": "{{app}}" }
+          ]
+        },
+        {
+          "title": "Memoria JVM usada (heap) por servicio",
+          "type": "timeseries",
+          "datasource": "Prometheus",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+          "targets": [
+            { "expr": "sum(jvm_memory_used_bytes{area=\"heap\"}) by (app)", "legendFormat": "{{app}}" }
+          ]
+        },
+        {
+          "title": "[NEGOCIO] Validaciones de acceso en el gateway (5xx vs OK)",
+          "type": "timeseries",
+          "datasource": "Prometheus",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+          "targets": [
+            { "expr": "sum(rate(http_server_requests_seconds_count{app=\"gateway\"}[1m])) by (status)", "legendFormat": "HTTP {{status}}" }
+          ]
+        },
+        {
+          "title": "[NEGOCIO] Logins procesados por el servicio auth",
+          "type": "stat",
+          "datasource": "Prometheus",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+          "targets": [
+            { "expr": "sum(increase(http_server_requests_seconds_count{app=\"auth\", uri=~\".*login.*\"}[1h]))", "legendFormat": "logins/última hora" }
+          ]
+        },
+        {
+          "title": "Estado del Circuit Breaker (gateway -> redis)",
+          "type": "timeseries",
+          "datasource": "Prometheus",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+          "targets": [
+            { "expr": "resilience4j_circuitbreaker_state{app=\"gateway\"}", "legendFormat": "{{state}}" }
+          ]
+        }
+      ],
+      "schemaVersion": 39,
+      "tags": ["circleguard"],
+      "time": { "from": "now-1h", "to": "now" },
+      "title": "CircleGuard Overview",
+      "uid": "circleguard-overview",
+      "version": 1
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: circleguard-monitoring
+  labels: { app: grafana }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: grafana } }
+  template:
+    metadata:
+      labels: { app: grafana }
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 472
+        fsGroup: 472
+      containers:
+        - name: grafana
+          image: grafana/grafana:11.1.0
+          ports: [{ containerPort: 3000 }]
+          env:
+            - { name: GF_SECURITY_ADMIN_USER, value: "admin" }
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              valueFrom: { secretKeyRef: { name: grafana-admin, key: password } }
+            - { name: GF_USERS_ALLOW_SIGN_UP, value: "false" }
+          resources:
+            requests: { cpu: "50m", memory: "128Mi" }
+            limits:   { cpu: "300m", memory: "256Mi" }
+          volumeMounts:
+            - { name: datasources, mountPath: /etc/grafana/provisioning/datasources }
+            - { name: dash-provider, mountPath: /etc/grafana/provisioning/dashboards }
+            - { name: dashboards, mountPath: /var/lib/grafana/dashboards }
+          readinessProbe:
+            httpGet: { path: /api/health, port: 3000 }
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /api/health, port: 3000 }
+            initialDelaySeconds: 30
+            periodSeconds: 15
+      volumes:
+        - { name: datasources,   configMap: { name: grafana-datasources } }
+        - { name: dash-provider, configMap: { name: grafana-dashboard-provider } }
+        - { name: dashboards,    configMap: { name: grafana-dashboards } }
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: grafana-admin
+  namespace: circleguard-monitoring
+type: Opaque
+stringData:
+  password: "circleguard"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: circleguard-monitoring
+  labels: { app: grafana }
+spec:
+  type: NodePort
+  selector: { app: grafana }
+  ports:
+    - { port: 3000, targetPort: 3000, nodePort: 30030 }

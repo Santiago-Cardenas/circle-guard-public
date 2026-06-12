@@ -1,0 +1,13 @@
+# =====================================================================
+# FASE 5 — Namespace dedicado para el stack de observabilidad.
+# Aquí viven Prometheus, Grafana, Elasticsearch, Kibana, Filebeat y
+# Jaeger. Se separa de los namespaces de aplicación (dev/stage/prod)
+# para aislar responsabilidades y poder aplicar RBAC/NetworkPolicy.
+# =====================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: circleguard-monitoring
+  labels:
+    name: circleguard-monitoring
+    purpose: observability

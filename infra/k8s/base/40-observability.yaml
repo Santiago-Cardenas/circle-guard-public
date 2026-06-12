@@ -1,0 +1,31 @@
+# =====================================================================
+# FASE 5 — Observabilidad: configuración común inyectada a TODOS los
+# microservicios vía `envFrom`. Activa Actuator (probes + métricas
+# Prometheus) y el envío de trazas a Jaeger en formato Zipkin v2.
+#
+# El stack de monitoreo (Prometheus/Grafana/ELK/Jaeger) vive en el
+# namespace `circleguard-monitoring`; por eso los endpoints usan FQDN
+# cross-namespace (`<svc>.circleguard-monitoring.svc.cluster.local`).
+# =====================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: circleguard-observability
+data:
+  # --- Actuator: qué endpoints exponemos por HTTP ---
+  MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: "health,info,prometheus,metrics,circuitbreakers"
+  MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS: "always"
+  # Habilita /actuator/health/liveness y /actuator/health/readiness (K8s probes)
+  MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: "true"
+  MANAGEMENT_HEALTH_LIVENESSSTATE_ENABLED: "true"
+  MANAGEMENT_HEALTH_READINESSSTATE_ENABLED: "true"
+
+  # --- Métricas Prometheus ---
+  MANAGEMENT_PROMETHEUS_METRICS_EXPORT_ENABLED: "true"
+  # Habilita el histograma de latencias HTTP (percentiles p50/p95/p99 en Grafana)
+  MANAGEMENT_METRICS_DISTRIBUTION_PERCENTILES_HISTOGRAM_HTTP_SERVER_REQUESTS: "true"
+
+  # --- Tracing distribuido (Brave -> Jaeger vía Zipkin) ---
+  # 1.0 = se muestrea el 100% de las peticiones (ideal para la demo).
+  MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
+  MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: "http://jaeger-collector.circleguard-monitoring.svc.cluster.local:9411/api/v2/spans"
