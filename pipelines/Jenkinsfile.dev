@@ -166,7 +166,7 @@ pipeline {
       steps {
         sh '''
           # Solo ejecuta si Chaos Mesh esta instalado en el cluster.
-          if kubectl get namespace chaos-mesh >/dev/null 2>&1; then
+          if kubectl get namespace chaos-testing >/dev/null 2>&1; then
             echo "Chaos Mesh detectado — ejecutando experimentos de caos en ${K8S_NS}..."
             kubectl apply -f infra/k8s/chaos/01-pod-kill-gateway.yaml -n ${K8S_NS}
             kubectl apply -f infra/k8s/chaos/02-network-delay-identity.yaml -n ${K8S_NS}
