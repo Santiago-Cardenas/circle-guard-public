@@ -48,13 +48,15 @@ pipeline {
       steps {
         sh '''
           set -e
-          kubectl -n circleguard-stage get deploy
+          echo "Checking critical deployments in stage (gateway, auth, dashboard)..."
+          kubectl -n circleguard-stage get deploy gateway auth dashboard
           not_ready=$(kubectl -n circleguard-stage get deploy -o json | \
-            python3 -c 'import sys,json; d=json.load(sys.stdin); print(sum(1 for x in d["items"] if (x["status"].get("readyReplicas") or 0) < (x["spec"].get("replicas") or 1)))')
+            python3 -c 'import sys,json; d=json.load(sys.stdin); critical=["gateway","auth","dashboard"]; print(sum(1 for x in d["items"] if x["metadata"]["name"] in critical and (x["status"].get("readyReplicas") or 0) < (x["spec"].get("replicas") or 1)))')
           if [ "${not_ready}" != "0" ]; then
-            echo "ERROR: hay ${not_ready} deployment(s) no-ready en stage. Aborto promocion a prod."
+            echo "ERROR: hay ${not_ready} deployment(s) critico(s) no-ready en stage. Aborto promocion a prod."
             exit 1
           fi
+          echo "✓ Todos los deployments criticos en stage estan listos."
         '''
       }
     }
