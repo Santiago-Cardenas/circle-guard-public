@@ -1,0 +1,115 @@
+# =====================================================================
+# FASE 6 Bono C — DestinationRules: connection pool + outlier detection
+#
+# Circuit breaker a nivel de sidecar (complementa Resilience4j):
+# si un pod responde con errores consecutivos se eyecta temporalmente
+# del pool de balanceo sin afectar a los demas pods.
+# =====================================================================
+
+# --- gateway ---
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: gateway-dr
+  namespace: circleguard-dev
+spec:
+  host: gateway
+  trafficPolicy:
+    connectionPool:
+      tcp:  { maxConnections: 100 }
+      http: { http1MaxPendingRequests: 100, http2MaxRequests: 500 }
+    outlierDetection:
+      consecutive5xxErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+---
+# --- identity ---
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: identity-dr
+  namespace: circleguard-dev
+spec:
+  host: identity
+  trafficPolicy:
+    connectionPool:
+      tcp:  { maxConnections: 50 }
+      http: { http1MaxPendingRequests: 50, http2MaxRequests: 200 }
+    outlierDetection:
+      consecutive5xxErrors: 3
+      interval: 20s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 100
+---
+# --- promotion ---
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: promotion-dr
+  namespace: circleguard-dev
+spec:
+  host: promotion
+  trafficPolicy:
+    connectionPool:
+      tcp:  { maxConnections: 50 }
+      http: { http1MaxPendingRequests: 50, http2MaxRequests: 200 }
+    outlierDetection:
+      consecutive5xxErrors: 3
+      interval: 20s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 100
+---
+# --- auth ---
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: auth-dr
+  namespace: circleguard-dev
+spec:
+  host: auth
+  trafficPolicy:
+    connectionPool:
+      tcp:  { maxConnections: 50 }
+      http: { http1MaxPendingRequests: 50, http2MaxRequests: 200 }
+    outlierDetection:
+      consecutive5xxErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+---
+# --- notification ---
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: notification-dr
+  namespace: circleguard-dev
+spec:
+  host: notification
+  trafficPolicy:
+    connectionPool:
+      tcp:  { maxConnections: 30 }
+      http: { http1MaxPendingRequests: 30, http2MaxRequests: 100 }
+    outlierDetection:
+      consecutive5xxErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+---
+# --- dashboard ---
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: dashboard-dr
+  namespace: circleguard-dev
+spec:
+  host: dashboard
+  trafficPolicy:
+    connectionPool:
+      tcp:  { maxConnections: 50 }
+      http: { http1MaxPendingRequests: 50, http2MaxRequests: 200 }
+    outlierDetection:
+      consecutive5xxErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
