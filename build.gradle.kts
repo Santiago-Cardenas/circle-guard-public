@@ -4,6 +4,22 @@ plugins {
     kotlin("jvm") version "1.9.24" apply false
     kotlin("plugin.spring") version "1.9.24" apply false
     kotlin("plugin.jpa") version "1.9.24" apply false
+    // Plugin para mandar el analisis de calidad a SonarQube
+    id("org.sonarqube") version "5.1.0.4882"
+}
+
+// Configuracion de SonarQube para todo el proyecto.
+// El servidor corre local en http://localhost:9000 (contenedor docker).
+sonar {
+    properties {
+        property("sonar.projectKey", "circleguard")
+        property("sonar.projectName", "CircleGuard")
+        // Junta los reportes de cobertura de todos los servicios
+        property(
+            "sonar.coverage.jacoco.xmlReportPaths",
+            "**/build/reports/jacoco/test/jacocoTestReport.xml"
+        )
+    }
 }
 
 allprojects {
@@ -18,6 +34,8 @@ allprojects {
 subprojects {
     apply(plugin = "java")
     apply(plugin = "org.jetbrains.kotlin.jvm")
+    // JaCoCo mide la cobertura de las pruebas en cada servicio
+    apply(plugin = "jacoco")
     extensions.configure<JavaPluginExtension> {
         toolchain {
             languageVersion.set(JavaLanguageVersion.of(21))
@@ -45,5 +63,18 @@ subprojects {
 
     tasks.withType<Test> {
         useJUnitPlatform()
+    }
+
+    // Despues de correr los tests, genera el reporte de cobertura en XML
+    // (que es el que lee SonarQube).
+    tasks.withType<Test> {
+        finalizedBy(tasks.withType<JacocoReport>())
+    }
+    tasks.withType<JacocoReport> {
+        dependsOn(tasks.withType<Test>())
+        reports {
+            xml.required.set(true)
+            html.required.set(true)
+        }
     }
 }

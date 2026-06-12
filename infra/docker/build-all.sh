@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build de imágenes Docker para los 6 microservicios del Taller 2.
+# Build de imágenes Docker para los microservicios de CircleGuard.
 #
 # Estrategia: los JARs se compilan una sola vez en el host (stage
 # "Assemble JARs" del Jenkinsfile, vía ./gradlew bootJar). Aquí solo

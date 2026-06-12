@@ -1,6 +1,6 @@
 # Infrastructure
 
-Carpeta para artefactos de infraestructura del Taller 2.
+Carpeta para artefactos de infraestructura del proyecto.
 
 ```
 infra/
