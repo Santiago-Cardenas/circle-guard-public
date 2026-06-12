@@ -65,7 +65,7 @@ pipeline {
             ./gradlew sonar \
               -Dsonar.host.url=http://host.docker.internal:9000 \
               -Dsonar.token=${SONAR_TOKEN} \
-              --no-daemon --console=plain
+              --no-daemon --console=plain --warning-mode=none
           '''
         }
       }
