@@ -1,0 +1,87 @@
+# =====================================================================
+# FASE 6 Bono C — VirtualServices: retry policies y timeouts
+#
+# Define comportamiento de trafico a nivel L7 para los microservicios
+# criticos. El gateway es el punto de entrada; los reintentos aqui
+# complementan el Circuit Breaker de Resilience4j a nivel de aplicacion.
+# =====================================================================
+
+# --- gateway: 3 reintentos con timeout de 30s ---
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: gateway-vs
+  namespace: circleguard-dev
+spec:
+  hosts:
+    - gateway
+  http:
+    - timeout: 30s
+      retries:
+        attempts: 3
+        perTryTimeout: 8s
+        retryOn: "5xx,reset,connect-failure,retriable-4xx"
+      route:
+        - destination:
+            host: gateway
+            port: { number: 8087 }
+---
+# --- identity: timeout corto para disparar Circuit Breaker rapido ---
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: identity-vs
+  namespace: circleguard-dev
+spec:
+  hosts:
+    - identity
+  http:
+    - timeout: 10s
+      retries:
+        attempts: 2
+        perTryTimeout: 4s
+        retryOn: "5xx,reset,connect-failure"
+      route:
+        - destination:
+            host: identity
+            port: { number: 8083 }
+---
+# --- promotion: timeout mas largo por operaciones de grafo Neo4j ---
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: promotion-vs
+  namespace: circleguard-dev
+spec:
+  hosts:
+    - promotion
+  http:
+    - timeout: 20s
+      retries:
+        attempts: 2
+        perTryTimeout: 8s
+        retryOn: "5xx,reset,connect-failure"
+      route:
+        - destination:
+            host: promotion
+            port: { number: 8088 }
+---
+# --- auth: timeout estandar ---
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: auth-vs
+  namespace: circleguard-dev
+spec:
+  hosts:
+    - auth
+  http:
+    - timeout: 15s
+      retries:
+        attempts: 2
+        perTryTimeout: 5s
+        retryOn: "5xx,reset,connect-failure"
+      route:
+        - destination:
+            host: auth
+            port: { number: 8180 }

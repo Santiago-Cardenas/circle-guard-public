@@ -1,0 +1,203 @@
+# =====================================================================
+# FASE 5 — ELK Stack (gestión de logs)
+#
+#   • Elasticsearch (single-node, modo demo sin seguridad TLS interna).
+#   • Kibana (UI para explorar logs, NodePort 30560).
+#   • Filebeat (DaemonSet) lee los logs de TODOS los contenedores del
+#     nodo desde /var/log/containers y los envía a Elasticsearch.
+#
+# Nota: en local (Docker Desktop) un solo nodo de Elasticsearch es
+# suficiente. En prod real se usaría un cluster con almacenamiento
+# persistente y seguridad habilitada.
+# =====================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: elasticsearch
+  namespace: circleguard-monitoring
+  labels: { app: elasticsearch }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: elasticsearch } }
+  template:
+    metadata:
+      labels: { app: elasticsearch }
+    spec:
+      containers:
+        - name: elasticsearch
+          image: docker.elastic.co/elasticsearch/elasticsearch:8.14.1
+          ports:
+            - { containerPort: 9200, name: http }
+            - { containerPort: 9300, name: transport }
+          env:
+            - { name: discovery.type, value: "single-node" }
+            # Desactivamos seguridad/TLS interna para simplificar la demo local.
+            - { name: xpack.security.enabled, value: "false" }
+            - { name: ES_JAVA_OPTS, value: "-Xms256m -Xmx256m" }
+          resources:
+            requests: { cpu: "200m", memory: "512Mi" }
+            limits:   { cpu: "1",    memory: "768Mi" }
+          readinessProbe:
+            httpGet: { path: "/_cluster/health?local=true", port: 9200 }
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 10
+          volumeMounts:
+            - { name: data, mountPath: /usr/share/elasticsearch/data }
+      volumes:
+        - { name: data, emptyDir: {} }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: elasticsearch
+  namespace: circleguard-monitoring
+  labels: { app: elasticsearch }
+spec:
+  selector: { app: elasticsearch }
+  ports:
+    - { port: 9200, targetPort: 9200, name: http }
+    - { port: 9300, targetPort: 9300, name: transport }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kibana
+  namespace: circleguard-monitoring
+  labels: { app: kibana }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: kibana } }
+  template:
+    metadata:
+      labels: { app: kibana }
+    spec:
+      containers:
+        - name: kibana
+          image: docker.elastic.co/kibana/kibana:8.14.1
+          ports: [{ containerPort: 5601 }]
+          env:
+            - { name: ELASTICSEARCH_HOSTS, value: "http://elasticsearch.circleguard-monitoring.svc.cluster.local:9200" }
+          resources:
+            requests: { cpu: "100m", memory: "512Mi" }
+            limits:   { cpu: "500m", memory: "1Gi" }
+          readinessProbe:
+            httpGet: { path: /api/status, port: 5601 }
+            initialDelaySeconds: 40
+            periodSeconds: 15
+            failureThreshold: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kibana
+  namespace: circleguard-monitoring
+  labels: { app: kibana }
+spec:
+  type: NodePort
+  selector: { app: kibana }
+  ports:
+    - { port: 5601, targetPort: 5601, nodePort: 30560 }
+---
+# ----- Filebeat: RBAC para leer metadata de pods -----
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: filebeat
+  namespace: circleguard-monitoring
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: filebeat
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces", "pods", "nodes"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: filebeat
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: filebeat
+subjects:
+  - kind: ServiceAccount
+    name: filebeat
+    namespace: circleguard-monitoring
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: filebeat-config
+  namespace: circleguard-monitoring
+data:
+  filebeat.yml: |
+    filebeat.inputs:
+      - type: container
+        paths:
+          - /var/log/containers/*.log
+        processors:
+          - add_kubernetes_metadata:
+              host: ${NODE_NAME}
+              matchers:
+                - logs_path:
+                    logs_path: "/var/log/containers/"
+
+    # Solo enviamos logs de los namespaces de CircleGuard (reduce ruido).
+    processors:
+      - drop_event:
+          when:
+            not:
+              or:
+                - contains: { kubernetes.namespace: "circleguard-dev" }
+                - contains: { kubernetes.namespace: "circleguard-stage" }
+                - contains: { kubernetes.namespace: "circleguard-prod" }
+                - contains: { kubernetes.namespace: "circleguard-monitoring" }
+
+    output.elasticsearch:
+      hosts: ["http://elasticsearch.circleguard-monitoring.svc.cluster.local:9200"]
+      index: "circleguard-logs-%{+yyyy.MM.dd}"
+
+    setup.template.name: "circleguard-logs"
+    setup.template.pattern: "circleguard-logs-*"
+    setup.ilm.enabled: false
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: filebeat
+  namespace: circleguard-monitoring
+  labels: { app: filebeat }
+spec:
+  selector: { matchLabels: { app: filebeat } }
+  template:
+    metadata:
+      labels: { app: filebeat }
+    spec:
+      serviceAccountName: filebeat
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: filebeat
+          image: docker.elastic.co/beats/filebeat:8.14.1
+          args: ["-c", "/etc/filebeat.yml", "-e"]
+          env:
+            - name: NODE_NAME
+              valueFrom: { fieldRef: { fieldPath: spec.nodeName } }
+          securityContext:
+            runAsUser: 0
+          resources:
+            requests: { cpu: "50m", memory: "128Mi" }
+            limits:   { cpu: "200m", memory: "256Mi" }
+          volumeMounts:
+            - { name: config, mountPath: /etc/filebeat.yml, subPath: filebeat.yml, readOnly: true }
+            - { name: varlogcontainers, mountPath: /var/log/containers, readOnly: true }
+            - { name: varlogpods, mountPath: /var/log/pods, readOnly: true }
+            - { name: varlibdockercontainers, mountPath: /var/lib/docker/containers, readOnly: true }
+      volumes:
+        - { name: config, configMap: { name: filebeat-config } }
+        - { name: varlogcontainers, hostPath: { path: /var/log/containers } }
+        - { name: varlogpods, hostPath: { path: /var/log/pods } }
+        - { name: varlibdockercontainers, hostPath: { path: /var/lib/docker/containers } }
