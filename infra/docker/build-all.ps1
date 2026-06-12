@@ -1,4 +1,4 @@
-# Build de imágenes Docker para los 6 microservicios del Taller 2.
+# Build de imágenes Docker para los microservicios de CircleGuard.
 # Uso:
 #   PowerShell:  ./infra/docker/build-all.ps1 [-Tag dev]
 #   Bash:        TAG=dev ./infra/docker/build-all.sh

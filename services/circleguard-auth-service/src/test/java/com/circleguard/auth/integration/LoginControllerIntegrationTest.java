@@ -25,7 +25,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /**
- * Pruebas de integración (M5b — Taller 2) para LoginController.
+ * Pruebas de integración para LoginController.
  * Levanta el slice MVC con la SecurityConfig real; mockea
  * únicamente las dependencias externas (auth manager, identity client).
  */

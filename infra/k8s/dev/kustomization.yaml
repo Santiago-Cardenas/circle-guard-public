@@ -5,6 +5,7 @@ namespace: circleguard-dev
 
 resources:
   - ../base
+  - mailhog-ext.yaml
 
 commonLabels:
   env: dev

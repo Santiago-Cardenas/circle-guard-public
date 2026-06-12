@@ -11,7 +11,7 @@ import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.*;
 
 /**
- * Pruebas End-to-End (M5c — Taller 2) contra el cluster Kubernetes desplegado.
+ * Pruebas End-to-End contra el cluster Kubernetes desplegado.
  * Apuntan al gateway expuesto vía NodePort y a los endpoints públicos
  * (health, dashboard analytics) sin requerir credenciales reales de LDAP.
  *
