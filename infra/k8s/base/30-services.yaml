@@ -74,6 +74,13 @@ spec:
           image: circleguard/auth:dev
           imagePullPolicy: IfNotPresent
           ports: [{ containerPort: 8180 }]
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "256Mi"
+            limits:
+              cpu: "800m"
+              memory: "512Mi"
           envFrom:
             - configMapRef: { name: circleguard-observability }
           livenessProbe:
@@ -128,6 +135,13 @@ spec:
           image: circleguard/gateway:dev
           imagePullPolicy: IfNotPresent
           ports: [{ containerPort: 8087 }]
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "512Mi"
           envFrom:
             - configMapRef: { name: circleguard-observability }
           livenessProbe:
@@ -280,6 +294,13 @@ spec:
           image: circleguard/dashboard:dev
           imagePullPolicy: IfNotPresent
           ports: [{ containerPort: 8084 }]
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "256Mi"
+            limits:
+              cpu: "800m"
+              memory: "512Mi"
           envFrom:
             - configMapRef: { name: circleguard-observability }
           livenessProbe:
