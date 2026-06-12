@@ -33,10 +33,10 @@ spec:
             - { name: discovery.type, value: "single-node" }
             # Desactivamos seguridad/TLS interna para simplificar la demo local.
             - { name: xpack.security.enabled, value: "false" }
-            - { name: ES_JAVA_OPTS, value: "-Xms512m -Xmx512m" }
+            - { name: ES_JAVA_OPTS, value: "-Xms256m -Xmx256m" }
           resources:
-            requests: { cpu: "200m", memory: "1Gi" }
-            limits:   { cpu: "1",    memory: "1536Mi" }
+            requests: { cpu: "200m", memory: "512Mi" }
+            limits:   { cpu: "1",    memory: "768Mi" }
           readinessProbe:
             httpGet: { path: "/_cluster/health?local=true", port: 9200 }
             initialDelaySeconds: 30
