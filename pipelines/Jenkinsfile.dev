@@ -162,6 +162,29 @@ pipeline {
       }
     }
 
+    stage('Chaos Engineering (Bono B)') {
+      steps {
+        sh '''
+          # Solo ejecuta si Chaos Mesh esta instalado en el cluster.
+          if kubectl get namespace chaos-mesh >/dev/null 2>&1; then
+            echo "Chaos Mesh detectado — ejecutando experimentos de caos en ${K8S_NS}..."
+            kubectl apply -f infra/k8s/chaos/01-pod-kill-gateway.yaml -n ${K8S_NS}
+            kubectl apply -f infra/k8s/chaos/02-network-delay-identity.yaml -n ${K8S_NS}
+            echo "Experimentos activos. Esperando 60s para observar recuperacion automatica..."
+            sleep 60
+            echo "=== Estado pods post-caos ==="
+            kubectl get pods -n ${K8S_NS}
+            echo "=== Limpiando experimentos ==="
+            kubectl delete -f infra/k8s/chaos/01-pod-kill-gateway.yaml -n ${K8S_NS} 2>/dev/null || true
+            kubectl delete -f infra/k8s/chaos/02-network-delay-identity.yaml -n ${K8S_NS} 2>/dev/null || true
+            echo "Chaos Engineering completado."
+          else
+            echo "Chaos Mesh no instalado — saltando. Ejecuta infra/k8s/chaos/00-install-chaos-mesh.sh para activarlo."
+          fi
+        '''
+      }
+    }
+
     stage('Auto-promote dev -> stage') {
       steps {
         withCredentials([usernamePassword(credentialsId: 'github-pat',

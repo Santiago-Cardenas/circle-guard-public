@@ -114,6 +114,39 @@ pipeline {
       }
     }
 
+    stage('Pruebas de rendimiento (Locust)') {
+      steps {
+        sh '''
+          set +e
+          mkdir -p tests/perf/build
+          echo "Iniciando pruebas de carga con Locust (20 usuarios, 60s)..."
+          docker run --rm \
+            --add-host=host.docker.internal:host-gateway \
+            -e GATEWAY_URL=${GATEWAY_URL} \
+            -e AUTH_URL=${AUTH_URL} \
+            -e DASHBOARD_URL=${DASHBOARD_URL} \
+            -v "$(pwd)/tests/perf:/mnt/locust" \
+            locustio/locust \
+              -f /mnt/locust/locustfile.py \
+              --headless \
+              --users 20 \
+              --spawn-rate 2 \
+              --run-time 60s \
+              --host ${GATEWAY_URL} \
+              --html /mnt/locust/build/locust-report.html \
+              --csv /mnt/locust/build/locust \
+              2>&1 | tail -20
+          echo "Locust finalizado (reporte en tests/perf/build/locust-report.html)."
+        '''
+      }
+      post {
+        always {
+          archiveArtifacts artifacts: 'tests/perf/build/locust-*.html,tests/perf/build/locust-*.csv',
+                           fingerprint: true, allowEmptyArchive: true
+        }
+      }
+    }
+
     stage('Escaneo DAST (OWASP ZAP)') {
       steps {
         // ZAP ataca el gateway ya desplegado para buscar problemas de seguridad
