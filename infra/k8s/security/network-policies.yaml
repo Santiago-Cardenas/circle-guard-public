@@ -1,0 +1,70 @@
+# =====================================================================
+# FASE 5 — Hardening: NetworkPolicies (micro-segmentación).
+#
+# Estrategia "default-deny + allow explícito":
+#   1) Se niega TODO el tráfico de entrada (ingress) a los pods.
+#   2) Se permite el tráfico ENTRE pods del mismo namespace (los
+#      microservicios se llaman entre sí).
+#   3) Se permite que el namespace de monitoreo haga scrape de métricas.
+#   4) Se permite el tráfico EXTERNO solo a los servicios públicos
+#      (gateway 8087, auth 8180, dashboard 8084) — así NO se rompe el
+#      acceso por NodePort que usan las pruebas E2E y la demo.
+#
+# Se aplican por namespace, p.ej.:
+#   kubectl apply -n circleguard-prod -f infra/k8s/security/network-policies.yaml
+#
+# NOTA: Docker Desktop NO trae un controlador de NetworkPolicy por
+# defecto. Estas políticas documentan la intención de seguridad y
+# funcionan en clusters con CNI que las soporte (Calico/Cilium).
+# =====================================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+spec:
+  podSelector: {}          # aplica a todos los pods del namespace
+  policyTypes: ["Ingress"]
+  # Sin reglas `ingress` => se niega todo el tráfico entrante.
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-same-namespace
+spec:
+  podSelector: {}
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector: {}   # cualquier pod del mismo namespace
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-monitoring-scrape
+spec:
+  podSelector: {}
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: circleguard-monitoring
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-external-public-services
+spec:
+  # Solo gateway, auth y dashboard son accesibles desde fuera.
+  podSelector:
+    matchExpressions:
+      - key: app
+        operator: In
+        values: ["gateway", "auth", "dashboard"]
+  policyTypes: ["Ingress"]
+  ingress:
+    # `from` vacío => permite desde CUALQUIER origen (incluye NodePort).
+    - ports:
+        - { protocol: TCP, port: 8087 }
+        - { protocol: TCP, port: 8180 }
+        - { protocol: TCP, port: 8084 }

@@ -11,7 +11,12 @@ spec:
   replicas: 1
   selector: { matchLabels: { app: identity } }
   template:
-    metadata: { labels: { app: identity } }
+    metadata:
+      labels: { app: identity }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8083"
+        prometheus.io/path: "/actuator/prometheus"
     spec:
       enableServiceLinks: false
       containers:
@@ -19,6 +24,18 @@ spec:
           image: circleguard/identity:dev
           imagePullPolicy: IfNotPresent
           ports: [{ containerPort: 8083 }]
+          envFrom:
+            - configMapRef: { name: circleguard-observability }
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: 8083 }
+            initialDelaySeconds: 40
+            periodSeconds: 15
+            failureThreshold: 6
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: 8083 }
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 6
           env:
             - { name: SERVER_PORT, value: "8083" }
             - { name: SPRING_DATASOURCE_URL, value: "jdbc:postgresql://postgres:5432/circleguard_identity" }
@@ -44,7 +61,12 @@ spec:
   replicas: 1
   selector: { matchLabels: { app: auth } }
   template:
-    metadata: { labels: { app: auth } }
+    metadata:
+      labels: { app: auth }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8180"
+        prometheus.io/path: "/actuator/prometheus"
     spec:
       enableServiceLinks: false
       containers:
@@ -52,6 +74,18 @@ spec:
           image: circleguard/auth:dev
           imagePullPolicy: IfNotPresent
           ports: [{ containerPort: 8180 }]
+          envFrom:
+            - configMapRef: { name: circleguard-observability }
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: 8180 }
+            initialDelaySeconds: 40
+            periodSeconds: 15
+            failureThreshold: 6
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: 8180 }
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 6
           env:
             - { name: SERVER_PORT, value: "8180" }
             - { name: SPRING_DATASOURCE_URL, value: "jdbc:postgresql://postgres:5432/circleguard_auth" }
@@ -81,7 +115,12 @@ spec:
   replicas: 1
   selector: { matchLabels: { app: gateway } }
   template:
-    metadata: { labels: { app: gateway } }
+    metadata:
+      labels: { app: gateway }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8087"
+        prometheus.io/path: "/actuator/prometheus"
     spec:
       enableServiceLinks: false
       containers:
@@ -89,6 +128,18 @@ spec:
           image: circleguard/gateway:dev
           imagePullPolicy: IfNotPresent
           ports: [{ containerPort: 8087 }]
+          envFrom:
+            - configMapRef: { name: circleguard-observability }
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: 8087 }
+            initialDelaySeconds: 40
+            periodSeconds: 15
+            failureThreshold: 6
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: 8087 }
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 6
           env:
             - { name: SERVER_PORT, value: "8087" }
             - { name: SPRING_DATA_REDIS_HOST, valueFrom: { configMapKeyRef: { name: circleguard-config, key: REDIS_HOST } } }
@@ -114,7 +165,12 @@ spec:
   replicas: 1
   selector: { matchLabels: { app: promotion } }
   template:
-    metadata: { labels: { app: promotion } }
+    metadata:
+      labels: { app: promotion }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8088"
+        prometheus.io/path: "/actuator/prometheus"
     spec:
       enableServiceLinks: false
       containers:
@@ -122,6 +178,18 @@ spec:
           image: circleguard/promotion:dev
           imagePullPolicy: IfNotPresent
           ports: [{ containerPort: 8088 }]
+          envFrom:
+            - configMapRef: { name: circleguard-observability }
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: 8088 }
+            initialDelaySeconds: 40
+            periodSeconds: 15
+            failureThreshold: 6
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: 8088 }
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 6
           env:
             - { name: SERVER_PORT, value: "8088" }
             - { name: SPRING_DATASOURCE_URL, value: "jdbc:postgresql://postgres:5432/circleguard_promotion" }
@@ -150,7 +218,12 @@ spec:
   replicas: 1
   selector: { matchLabels: { app: notification } }
   template:
-    metadata: { labels: { app: notification } }
+    metadata:
+      labels: { app: notification }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8082"
+        prometheus.io/path: "/actuator/prometheus"
     spec:
       enableServiceLinks: false
       containers:
@@ -158,6 +231,18 @@ spec:
           image: circleguard/notification:dev
           imagePullPolicy: IfNotPresent
           ports: [{ containerPort: 8082 }]
+          envFrom:
+            - configMapRef: { name: circleguard-observability }
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: 8082 }
+            initialDelaySeconds: 40
+            periodSeconds: 15
+            failureThreshold: 6
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: 8082 }
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 6
           env:
             - { name: SERVER_PORT, value: "8082" }
             - { name: SPRING_KAFKA_BOOTSTRAP_SERVERS, valueFrom: { configMapKeyRef: { name: circleguard-config, key: KAFKA_BOOTSTRAP_SERVERS } } }
@@ -182,7 +267,12 @@ spec:
   replicas: 1
   selector: { matchLabels: { app: dashboard } }
   template:
-    metadata: { labels: { app: dashboard } }
+    metadata:
+      labels: { app: dashboard }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8084"
+        prometheus.io/path: "/actuator/prometheus"
     spec:
       enableServiceLinks: false
       containers:
@@ -190,6 +280,18 @@ spec:
           image: circleguard/dashboard:dev
           imagePullPolicy: IfNotPresent
           ports: [{ containerPort: 8084 }]
+          envFrom:
+            - configMapRef: { name: circleguard-observability }
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: 8084 }
+            initialDelaySeconds: 40
+            periodSeconds: 15
+            failureThreshold: 6
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: 8084 }
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 6
           env:
             - { name: SERVER_PORT, value: "8084" }
             - { name: SPRING_DATASOURCE_URL, value: "jdbc:postgresql://postgres:5432/circleguard_dashboard" }

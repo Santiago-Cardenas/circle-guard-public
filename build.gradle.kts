@@ -54,6 +54,22 @@ subprojects {
         "testRuntimeOnly"("com.h2database:h2")
     }
 
+    // ── FASE 5 (Observabilidad) ──────────────────────────────────────────
+    // Se instrumentan TODOS los microservicios de forma uniforme para no
+    // tocar cada build.gradle por separado:
+    //   • Actuator        -> endpoints /actuator/health, /prometheus, etc.
+    //   • Prometheus      -> registro de métricas en formato Prometheus.
+    //   • Tracing (Brave) -> trazas distribuidas enviadas a Jaeger (Zipkin v2).
+    // Solo se aplica a módulos con plugin de Spring Boot (los que tienen app).
+    plugins.withId("org.springframework.boot") {
+        dependencies {
+            "implementation"("org.springframework.boot:spring-boot-starter-actuator")
+            "implementation"("io.micrometer:micrometer-registry-prometheus")
+            "implementation"("io.micrometer:micrometer-tracing-bridge-brave")
+            "implementation"("io.zipkin.reporter2:zipkin-reporter-brave")
+        }
+    }
+
     tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
         kotlinOptions {
             freeCompilerArgs = listOf("-Xjsr305=strict")
