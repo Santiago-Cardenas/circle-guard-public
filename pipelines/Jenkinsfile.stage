@@ -87,6 +87,16 @@ pipeline {
       steps {
         sh '''
           set -e
+          # Wait for gateway to be healthy
+          echo "Waiting for gateway to be healthy..."
+          for i in {1..60}; do
+            if curl -f -s ${GATEWAY_URL}/actuator/health > /dev/null 2>&1; then
+              echo "✓ Gateway healthy after $i seconds"
+              break
+            fi
+            echo "Attempt $i/60: Gateway not ready yet..."
+            sleep 1
+          done
           ./gradlew :tests:e2e:test -PrunE2E=true \
             -DgatewayUrl=${GATEWAY_URL} \
             -DauthUrl=${AUTH_URL} \
