@@ -50,7 +50,7 @@ pipeline {
           set -e
           kubectl -n circleguard-stage get deploy
           not_ready=$(kubectl -n circleguard-stage get deploy -o json | \
-            python3 -c "import sys,json; d=json.load(sys.stdin); print(sum(1 for x in d['items'] if (x['status'].get('readyReplicas') or 0) < (x['spec'].get('replicas') or 1)))")
+            python3 -c 'import sys,json; d=json.load(sys.stdin); print(sum(1 for x in d["items"] if (x["status"].get("readyReplicas") or 0) < (x["spec"].get("replicas") or 1)))')
           if [ "${not_ready}" != "0" ]; then
             echo "ERROR: hay ${not_ready} deployment(s) no-ready en stage. Aborto promocion a prod."
             exit 1
@@ -64,7 +64,7 @@ pipeline {
         sh '''
           set -e
           chmod +x ./gradlew
-          ./gradlew test bootJar -x :tests:e2e:test --no-daemon --console=plain
+          ./gradlew test bootJar -x :tests:e2e:test --no-daemon --console=plain --warning-mode=none
           find services -path '*/build/libs/*.jar' ! -name '*-plain.jar' -printf '%p (%s bytes)\\n'
         '''
       }
