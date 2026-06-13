@@ -173,13 +173,13 @@ pipeline {
             echo "Chaos Mesh detectado — ejecutando experimentos de caos en ${K8S_NS}..."
             kubectl apply -f infra/k8s/chaos/01-pod-kill-gateway.yaml -n ${K8S_NS}
             kubectl apply -f infra/k8s/chaos/02-network-delay-identity.yaml -n ${K8S_NS}
-            echo "Experimentos activos. Esperando 60s para observar recuperacion automatica..."
-            sleep 60
+            echo "Experimentos activos. Esperando 10s para observar estado post-caos..."
+            sleep 10
             echo "=== Estado pods post-caos ==="
             kubectl get pods -n ${K8S_NS}
             echo "=== Limpiando experimentos ==="
-            kubectl delete -f infra/k8s/chaos/01-pod-kill-gateway.yaml -n ${K8S_NS} 2>/dev/null || true
-            kubectl delete -f infra/k8s/chaos/02-network-delay-identity.yaml -n ${K8S_NS} 2>/dev/null || true
+            kubectl delete -f infra/k8s/chaos/01-pod-kill-gateway.yaml -n ${K8S_NS} --wait=false 2>/dev/null || true
+            kubectl delete -f infra/k8s/chaos/02-network-delay-identity.yaml -n ${K8S_NS} --wait=false 2>/dev/null || true
             echo "Chaos Engineering completado."
           else
             echo "Chaos Mesh no instalado — saltando. Ejecuta infra/k8s/chaos/00-install-chaos-mesh.sh para activarlo."
