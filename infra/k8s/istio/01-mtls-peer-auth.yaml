@@ -1,9 +1,10 @@
 # =====================================================================
-# FASE 6 Bono C — PeerAuthentication: mTLS STRICT en circleguard-dev
+# FASE 6 Bono C — PeerAuthentication: mTLS en circleguard-dev
 #
-# Obliga a que toda comunicacion entre pods dentro del namespace use
-# mTLS mutuo gestionado por los sidecars Envoy de Istio.
-# Los servicios no necesitan cambiar — Istio intercepta transparentemente.
+# Modo PERMISSIVE: el tráfico entre pods con sidecar usa mTLS automático
+# (Envoy auto-negocia). El tráfico externo vía NodePort (sin sidecar en
+# el cliente) se acepta en texto plano — necesario para acceso local dev.
+# En producción con IngressGateway se usaría STRICT puro.
 #
 # Aplica con: kubectl apply -f infra/k8s/istio/01-mtls-peer-auth.yaml
 # Verifica:   istioctl analyze -n circleguard-dev
@@ -15,10 +16,12 @@ metadata:
   namespace: circleguard-dev
 spec:
   mtls:
-    mode: STRICT
+    mode: PERMISSIVE
 ---
 # AuthorizationPolicy: permite trafico entre microservicios del namespace
 # y desde el namespace de monitoreo (Prometheus scraping).
+# En dev con NodePort el trafico externo no tiene principal Istio,
+# por lo que se omite la restriccion por namespace y solo se aplica PERMISSIVE mTLS.
 apiVersion: security.istio.io/v1beta1
 kind: AuthorizationPolicy
 metadata:
@@ -33,3 +36,6 @@ spec:
               - circleguard-dev
               - circleguard-monitoring
               - istio-system
+    # Permitir tráfico externo (NodePort, sin principal Istio) — entorno dev
+    - {}
+
