@@ -18,7 +18,9 @@ spec:
   replicas: 1
   selector: { matchLabels: { app: postgres } }
   template:
-    metadata: { labels: { app: postgres } }
+    metadata:
+      labels: { app: postgres }
+      annotations: { sidecar.istio.io/inject: "false" }
     spec:
       enableServiceLinks: false
       containers:
@@ -52,7 +54,9 @@ spec:
   replicas: 1
   selector: { matchLabels: { app: neo4j } }
   template:
-    metadata: { labels: { app: neo4j } }
+    metadata:
+      labels: { app: neo4j }
+      annotations: { sidecar.istio.io/inject: "false" }
     spec:
       enableServiceLinks: false
       containers:
@@ -84,7 +88,9 @@ spec:
   replicas: 1
   selector: { matchLabels: { app: redis } }
   template:
-    metadata: { labels: { app: redis } }
+    metadata:
+      labels: { app: redis }
+      annotations: { sidecar.istio.io/inject: "false" }
     spec:
       enableServiceLinks: false
       containers:
@@ -106,7 +112,9 @@ spec:
   replicas: 1
   selector: { matchLabels: { app: openldap } }
   template:
-    metadata: { labels: { app: openldap } }
+    metadata:
+      labels: { app: openldap }
+      annotations: { sidecar.istio.io/inject: "false" }
     spec:
       enableServiceLinks: false
       containers:
@@ -132,7 +140,9 @@ spec:
   replicas: 1
   selector: { matchLabels: { app: mailhog } }
   template:
-    metadata: { labels: { app: mailhog } }
+    metadata:
+      labels: { app: mailhog }
+      annotations: { sidecar.istio.io/inject: "false" }
     spec:
       enableServiceLinks: false
       containers:
