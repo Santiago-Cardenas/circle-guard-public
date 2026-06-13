@@ -132,7 +132,10 @@ pipeline {
             -p '{"spec":{"hard":{"limits.memory":"16Gi","limits.cpu":"8","requests.memory":"8Gi","requests.cpu":"4"}}}' \
             2>/dev/null || true
           kubectl apply -k infra/k8s/dev
-          kubectl -n ${K8S_NS} rollout status deployment --timeout=240s
+          # Servicios de app: rollout rapido
+          kubectl -n ${K8S_NS} rollout status deployment/gateway deployment/auth deployment/identity deployment/dashboard deployment/promotion deployment/notification --timeout=240s
+          # Infraestructura (BD, Kafka, Zookeeper): mas lento con sidecars Istio
+          kubectl -n ${K8S_NS} rollout status deployment/postgres deployment/redis deployment/neo4j deployment/zookeeper deployment/kafka deployment/openldap deployment/mailhog --timeout=480s
         '''
       }
     }
