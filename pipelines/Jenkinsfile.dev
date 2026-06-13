@@ -162,7 +162,7 @@ pipeline {
       }
     }
 
-    stage('Chaos Engineering (Bono B)') {
+    stage('Chaos Engineering') {
       steps {
         sh '''
           # Solo ejecuta si Chaos Mesh esta instalado en el cluster.
