@@ -213,10 +213,6 @@ pipeline {
   }
 
   post {
-    always {
-      // Escala dev a 0 para liberar RAM antes de que arranque el pipeline de stage.
-      sh 'kubectl -n ${K8S_NS} scale deployment --all --replicas=0 2>/dev/null || true'
-    }
     success {
       echo "Pipeline DEV OK — imágenes :${IMAGE_TAG} desplegadas en ${K8S_NS}"
     }
