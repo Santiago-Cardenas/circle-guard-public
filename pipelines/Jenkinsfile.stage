@@ -149,9 +149,6 @@ pipeline {
 
     stage('Escaneo DAST (OWASP ZAP)') {
       steps {
-        // ZAP ataca el gateway ya desplegado para buscar problemas de seguridad
-        // en tiempo de ejecucion (headers, cookies, etc.). El baseline es rapido
-        // y no rompe el build (solo deja el reporte como evidencia).
         sh '''
           set +e
           mkdir -p build/security
@@ -163,7 +160,14 @@ pipeline {
               -t ${GATEWAY_URL}/actuator/health \
               -r zap-gateway.html \
               -I
-          echo "ZAP termino (reporte en build/security/zap-gateway.html)."
+          ZAP_EXIT=$?
+          echo "ZAP exit code: ${ZAP_EXIT}"
+          ls -la build/security/ 2>&1 || true
+          if [ ! -f build/security/zap-gateway.html ]; then
+            echo "<html><body><h2>OWASP ZAP — Reporte no disponible</h2><p>ZAP salio con codigo ${ZAP_EXIT}. Ver logs del pipeline para detalle.</p></body></html>" > build/security/zap-gateway.html
+            echo "Reporte de fallback creado."
+          fi
+          echo "Reporte ZAP en build/security/zap-gateway.html"
         '''
       }
       post {
