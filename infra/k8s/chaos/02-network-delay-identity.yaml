@@ -26,4 +26,4 @@ spec:
     correlation: "25"
     jitter: "100ms"
   duration: "3m"
-  direction: both
+  direction: to
