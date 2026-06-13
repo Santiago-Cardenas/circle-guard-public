@@ -211,7 +211,11 @@ pipeline {
           echo "----- RELEASE NOTES -----"
           cat build/release/RELEASE-NOTES.md
         '''
-        archiveArtifacts artifacts: 'build/release/*', fingerprint: true
+      }
+      post {
+        always {
+          archiveArtifacts artifacts: 'build/release/*', fingerprint: true, allowEmptyArchive: true
+        }
       }
     }
 

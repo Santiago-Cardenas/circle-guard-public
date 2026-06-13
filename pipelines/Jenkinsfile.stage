@@ -136,12 +136,19 @@ pipeline {
               --html /mnt/locust/build/locust-report.html \
               --csv /mnt/locust/build/locust \
               2>&1 | tail -20
+          LOCUST_EXIT=$?
+          echo "Locust exit code: ${LOCUST_EXIT}"
+          ls -la tests/perf/build/ 2>&1 || true
+          if [ ! -f tests/perf/build/locust-report.html ]; then
+            echo "<html><body><h2>Locust — Reporte no disponible</h2><p>Locust salio con codigo ${LOCUST_EXIT}. Ver logs del pipeline para detalle.</p></body></html>" > tests/perf/build/locust-report.html
+            echo "Reporte de fallback creado."
+          fi
           echo "Locust finalizado (reporte en tests/perf/build/locust-report.html)."
         '''
       }
       post {
         always {
-          archiveArtifacts artifacts: 'tests/perf/build/locust-*.html,tests/perf/build/locust-*.csv',
+          archiveArtifacts artifacts: 'tests/perf/build/locust*.html,tests/perf/build/locust*.csv',
                            fingerprint: true, allowEmptyArchive: true
         }
       }
